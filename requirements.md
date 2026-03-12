@@ -106,7 +106,7 @@ ParallelTestRunner/
 - **Description**: Create `IntegrationTests.cs` that runs the full tool as a process against `DummyTestProject`. DummyTestProject should contain exactly 20 test methods so assertions are deterministic. Tests: discovers correct number of tests (20), runs with `--batch-size 5 --max-parallelism 2` and verifies all tests execute, verifies exit code 0 when all tests pass, runs with `FAIL_TESTS` env var set and verifies exit code 1. Locate DummyTestProject via solution-relative path resolved from the test assembly location.
 
 ### TASK-011: Create README.md with usage documentation
-- **Status**: pending
+- **Status**: done
 - **Priority**: medium
 - **Dependencies**: TASK-002, TASK-005
 - **Description**: Create a `README.md` covering the following sections:
