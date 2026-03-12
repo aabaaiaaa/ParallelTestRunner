@@ -52,7 +52,7 @@ ParallelTestRunner/
 - **Description**: Create `ParallelTestRunner.sln`, `src/ParallelTestRunner/ParallelTestRunner.csproj` (net10.0, System.CommandLine 2.0.0-beta5), `tests/ParallelTestRunner.Tests/ParallelTestRunner.Tests.csproj` (MSTest, net10.0), and `tests/DummyTestProject/DummyTestProject.csproj` (MSTest, net10.0). Wire all projects into the solution. Enable nullable and implicit usings. Configure `ParallelTestRunner.csproj` as a dotnet tool by adding `<PackAsTool>true</PackAsTool>`, `<ToolCommandName>parallel-test-runner</ToolCommandName>`, and `<PackageOutputPath>./nupkg</PackageOutputPath>`. Include standard NuGet metadata (`PackageId`, `Version`, `Authors`, `Description`).
 
 ### TASK-002: Implement CLI options and entry point
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-001
 - **Description**: Create `Options.cs` as a record with: `ProjectPath` (required argument), `BatchSize` (default 50), `MaxParallelism` (default `Math.Max(1, Environment.ProcessorCount / 2)`), `ExtraDotnetTestArgs` (string[]), `ResultsDirectory` (string?). Create `Program.cs` with a `RootCommand` using System.CommandLine that maps CLI args to `Options`. Wire `Console.CancelKeyPress` to a `CancellationTokenSource` for graceful Ctrl+C. On startup, print an ASCII art banner for "Parallel Test Runner" to stderr, followed by detected core count and chosen parallelism. The banner should be a hardcoded string literal — no runtime generation or external dependency needed.
