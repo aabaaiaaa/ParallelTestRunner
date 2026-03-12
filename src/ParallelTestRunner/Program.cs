@@ -60,8 +60,32 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 
     PrintBanner(options);
 
-    // Pipeline will be wired in TASK-007
-    await Task.CompletedTask;
+    // Step 1: Discover tests
+    IReadOnlyList<string> tests;
+    try
+    {
+        tests = await TestDiscovery.DiscoverAsync(options.ProjectPath, options.ExtraDotnetTestArgs, cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Discovery failed: {ex.Message}");
+        Environment.Exit(2);
+        return;
+    }
+
+    Console.Error.WriteLine($"  Discovered {tests.Count} tests");
+
+    // Step 2: Batch tests
+    var batches = TestBatcher.CreateBatches(tests, options.BatchSize);
+    Console.Error.WriteLine($"  Created {batches.Count} batches (batch size: {options.BatchSize})");
+    Console.Error.WriteLine();
+
+    // Step 3: Run batches in parallel
+    var results = await TestRunner.RunAllAsync(batches, options, cancellationToken);
+
+    // Step 4: Collate results and exit
+    var exitCode = ResultCollator.Collate(results);
+    Environment.Exit(exitCode);
 });
 
 var config = new CommandLineConfiguration(rootCommand);

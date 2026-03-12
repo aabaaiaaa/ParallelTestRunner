@@ -82,7 +82,7 @@ ParallelTestRunner/
 - **Description**: Create `ResultCollator.cs` with `Collate(BatchResult[] results)`. Prints summary to stderr (batch count, total test count, failed batches with details). Returns exit code: 0 if all passed, 1 if any failed.
 
 ### TASK-007: Wire orchestration pipeline in Program.cs
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-002, TASK-003, TASK-004, TASK-005, TASK-006
 - **Description**: In the `RootCommand` handler in `Program.cs`, wire the full pipeline: `TestDiscovery.DiscoverAsync` → log test count → `TestBatcher.CreateBatches` → log batch count → `TestRunner.RunAllAsync` → `ResultCollator.Collate` → `Environment.Exit(exitCode)`. Exit code 2 for infrastructure failures (discovery fails, zero tests).
