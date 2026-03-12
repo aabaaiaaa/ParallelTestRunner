@@ -6,7 +6,7 @@ Running `dotnet test` on a large MSTest solution is slow when tests execute sequ
 
 ## Architecture
 
-**.NET 10 console app** using `System.Diagnostics.Process` for subprocess management and `System.CommandLine` for argument parsing.
+**.NET 10 console app** packaged as a **dotnet tool** using `System.Diagnostics.Process` for subprocess management and `System.CommandLine` for argument parsing. Distributed via `dotnet tool install` — either globally or as a local tool manifest.
 
 ### Flow
 ```
@@ -49,13 +49,13 @@ ParallelTestRunner/
 - **Status**: pending
 - **Priority**: high
 - **Dependencies**: none
-- **Description**: Create `ParallelTestRunner.sln`, `src/ParallelTestRunner/ParallelTestRunner.csproj` (net10.0, System.CommandLine 2.0.0-beta5), `tests/ParallelTestRunner.Tests/ParallelTestRunner.Tests.csproj` (MSTest, net10.0), and `tests/DummyTestProject/DummyTestProject.csproj` (MSTest, net10.0). Wire all projects into the solution. Enable nullable and implicit usings.
+- **Description**: Create `ParallelTestRunner.sln`, `src/ParallelTestRunner/ParallelTestRunner.csproj` (net10.0, System.CommandLine 2.0.0-beta5), `tests/ParallelTestRunner.Tests/ParallelTestRunner.Tests.csproj` (MSTest, net10.0), and `tests/DummyTestProject/DummyTestProject.csproj` (MSTest, net10.0). Wire all projects into the solution. Enable nullable and implicit usings. Configure `ParallelTestRunner.csproj` as a dotnet tool by adding `<PackAsTool>true</PackAsTool>`, `<ToolCommandName>parallel-test-runner</ToolCommandName>`, and `<PackageOutputPath>./nupkg</PackageOutputPath>`. Include standard NuGet metadata (`PackageId`, `Version`, `Authors`, `Description`).
 
 ### TASK-002: Implement CLI options and entry point
 - **Status**: pending
 - **Priority**: high
 - **Dependencies**: TASK-001
-- **Description**: Create `Options.cs` as a record with: `ProjectPath` (required argument), `BatchSize` (default 50), `MaxParallelism` (default `Math.Max(1, Environment.ProcessorCount / 2)`), `ExtraDotnetTestArgs` (string[]), `ResultsDirectory` (string?). Create `Program.cs` with a `RootCommand` using System.CommandLine that maps CLI args to `Options`. Wire `Console.CancelKeyPress` to a `CancellationTokenSource` for graceful Ctrl+C. Log detected core count and chosen parallelism to stderr on startup.
+- **Description**: Create `Options.cs` as a record with: `ProjectPath` (required argument), `BatchSize` (default 50), `MaxParallelism` (default `Math.Max(1, Environment.ProcessorCount / 2)`), `ExtraDotnetTestArgs` (string[]), `ResultsDirectory` (string?). Create `Program.cs` with a `RootCommand` using System.CommandLine that maps CLI args to `Options`. Wire `Console.CancelKeyPress` to a `CancellationTokenSource` for graceful Ctrl+C. On startup, print an ASCII art banner for "Parallel Test Runner" to stderr, followed by detected core count and chosen parallelism. The banner should be a hardcoded string literal — no runtime generation or external dependency needed.
 
 ### TASK-003: Implement test discovery
 - **Status**: pending
@@ -105,10 +105,46 @@ ParallelTestRunner/
 - **Dependencies**: TASK-007, TASK-008
 - **Description**: Create `IntegrationTests.cs` that runs the full tool as a process against `DummyTestProject`. DummyTestProject should contain exactly 20 test methods so assertions are deterministic. Tests: discovers correct number of tests (20), runs with `--batch-size 5 --max-parallelism 2` and verifies all tests execute, verifies exit code 0 when all tests pass, runs with `FAIL_TESTS` env var set and verifies exit code 1. Locate DummyTestProject via solution-relative path resolved from the test assembly location.
 
-### TASK-011: Build and run all tests to verify completion
+### TASK-011: Create README.md with usage documentation
+- **Status**: pending
+- **Priority**: medium
+- **Dependencies**: TASK-002, TASK-005
+- **Description**: Create a `README.md` covering the following sections:
+
+  **1. Installation** — How to install as a dotnet tool:
+  - Global: `dotnet tool install --global ParallelTestRunner --add-source ./nupkg`
+  - Local (tool manifest): `dotnet new tool-manifest` then `dotnet tool install ParallelTestRunner --add-source ./nupkg`
+  - From a NuGet feed (if published): `dotnet tool install --global ParallelTestRunner`
+  - How to pack: `dotnet pack src/ParallelTestRunner`
+
+  **2. Local Developer Usage** — How to invoke the tool locally for testing during development. Two approaches:
+  - **Installed tool**: `parallel-test-runner <path-to-test-project>` (global) or `dotnet tool run parallel-test-runner <path-to-test-project>` (local manifest)
+  - **Without installing** (dev inner loop): `dotnet run --project src/ParallelTestRunner -- <path-to-test-project>`
+  - Example with options: `parallel-test-runner MyTests.csproj --batch-size 10 --max-parallelism 4`
+  - Passing extra dotnet test args: `parallel-test-runner MyTests.csproj -- --configuration Release --no-restore`
+
+  **3. TeamCity Build Step Configuration** — How to add build steps in TeamCity:
+  - **Step 1 (build)**: `dotnet build MySolution.sln` — required because the tool always passes `--no-build`
+  - **Step 2 (install tool)**: `dotnet tool install --global ParallelTestRunner --add-source <feed-or-path>` (or restore from a local tool manifest)
+  - **Step 3 (run tests)**: `parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4`
+  - Document that TeamCity is auto-detected via `TEAMCITY_VERSION` env var (no manual flag needed), which automatically appends `/TestAdapterPath:. /Logger:teamcity` so `##teamcity` service messages flow to the build log natively
+  - Include a complete sample build step script
+
+  **4. Configuration Reference** — Table of all CLI options with name, type, default, and description:
+  - `<project>` (required) — path to the test project/solution
+  - `--batch-size` (int, default 50) — number of tests per batch
+  - `--max-parallelism` (int, default `CPU cores / 2`) — max concurrent `dotnet test` processes
+  - `--results-dir` (string, optional) — directory for `.trx` result files
+  - Extra args (after `--`) — any additional args passed through to `dotnet test`
+
+  **5. Exit Codes** — 0 = all passed, 1 = test failures, 2 = infrastructure error
+
+  **6. Environment Variables** — `TEAMCITY_VERSION` (auto-detection for TeamCity logger), `FAIL_TESTS` (used by DummyTestProject for testing failure scenarios)
+
+### TASK-012: Build and run all tests to verify completion
 - **Status**: pending
 - **Priority**: high
-- **Dependencies**: TASK-009, TASK-010
+- **Dependencies**: TASK-009, TASK-010, TASK-011
 - **Description**: Run `dotnet build ParallelTestRunner.sln` and `dotnet test ParallelTestRunner.sln` to verify all unit and integration tests pass. Fix any issues found. This is the final verification step to confirm the project is complete and functional.
 
 ---
