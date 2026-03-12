@@ -70,7 +70,7 @@ ParallelTestRunner/
 - **Description**: Create `TestBatcher.cs` with `CreateBatches(IReadOnlyList<string> testNames, int batchSize)`. Uses `Chunk(batchSize)` to split tests into groups. Post-check: if any batch's filter string (`"FullyQualifiedName=X|FullyQualifiedName=Y|..."`) exceeds 7000 chars, auto-split that batch into smaller chunks to stay within Windows command-line length limits.
 
 ### TASK-005: Implement parallel test runner
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-003, TASK-004
 - **Description**: Create `TestRunner.cs` — the core orchestration class. Define `record BatchResult(int BatchIndex, int TestCount, int ExitCode)`. Uses `SemaphoreSlim(maxParallelism)` to throttle concurrent `dotnet test` processes. Accepts a `CancellationToken`; on cancellation, kill running child processes via `Process.Kill()` and propagate cancellation. For each batch: acquires semaphore, builds filter string (`--filter "FullyQualifiedName=X|FullyQualifiedName=Y|..."`), starts a `Process` with `RedirectStandardOutput/Error`, uses `BeginOutputReadLine`/`BeginErrorReadLine` with a shared `lock` around `Console.WriteLine` to ensure line-safe interleaving of TeamCity service messages. Passes `--no-build` on all invocations. Auto-detects TeamCity via `Environment.GetEnvironmentVariable("TEAMCITY_VERSION")` — if set, appends `/TestAdapterPath:. /Logger:teamcity`. Optionally writes `--logger "trx;LogFileName=batch_N.trx"` if results-dir is specified. Returns `BatchResult(batchIndex, testCount, exitCode)`.
