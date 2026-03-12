@@ -1,6 +1,12 @@
 {
   "phase": "run",
   "sessionId": null,
-  "lastIteration": 0,
-  "startedAt": "2026-03-12T22:59:36.643Z"
+  "lastIteration": 1,
+  "startedAt": "2026-03-12T22:59:36.643Z",
+  "activeTask": {
+    "taskId": "TASK-001",
+    "taskTitle": "Set up solution and project structure",
+    "iterationNumber": 1,
+    "startedAt": "2026-03-12T22:59:38.186Z"
+  }
 }

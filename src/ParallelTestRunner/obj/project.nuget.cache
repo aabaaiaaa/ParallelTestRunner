@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "rqtwvpi9Q2c=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\5.next.project\\src\\ParallelTestRunner\\ParallelTestRunner.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\jeastaugh\\.nuget\\packages\\system.commandline\\2.0.0-beta5.25306.1\\system.commandline.2.0.0-beta5.25306.1.nupkg.sha512"
+  ],
+  "logs": []
+}

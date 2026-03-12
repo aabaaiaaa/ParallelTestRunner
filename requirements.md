@@ -46,7 +46,7 @@ ParallelTestRunner/
 ## Tasks
 
 ### TASK-001: Set up solution and project structure
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: none
 - **Description**: Create `ParallelTestRunner.sln`, `src/ParallelTestRunner/ParallelTestRunner.csproj` (net10.0, System.CommandLine 2.0.0-beta5), `tests/ParallelTestRunner.Tests/ParallelTestRunner.Tests.csproj` (MSTest, net10.0), and `tests/DummyTestProject/DummyTestProject.csproj` (MSTest, net10.0). Wire all projects into the solution. Enable nullable and implicit usings. Configure `ParallelTestRunner.csproj` as a dotnet tool by adding `<PackAsTool>true</PackAsTool>`, `<ToolCommandName>parallel-test-runner</ToolCommandName>`, and `<PackageOutputPath>./nupkg</PackageOutputPath>`. Include standard NuGet metadata (`PackageId`, `Version`, `Authors`, `Description`).
