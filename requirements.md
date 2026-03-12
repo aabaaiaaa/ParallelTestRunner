@@ -88,7 +88,7 @@ ParallelTestRunner/
 - **Description**: In the `RootCommand` handler in `Program.cs`, wire the full pipeline: `TestDiscovery.DiscoverAsync` → log test count → `TestBatcher.CreateBatches` → log batch count → `TestRunner.RunAllAsync` → `ResultCollator.Collate` → `Environment.Exit(exitCode)`. Exit code 2 for infrastructure failures (discovery fails, zero tests).
 
 ### TASK-008: Create DummyTestProject
-- **Status**: pending
+- **Status**: done
 - **Priority**: medium
 - **Dependencies**: TASK-001
 - **Description**: Create `tests/DummyTestProject/DummyTests.cs` with exactly 20 MSTest methods across multiple classes and namespaces. Include: passing tests, deliberately failing tests (controlled via `FAIL_TESTS` environment variable), `[DataRow]` parameterized tests, and a couple of slow tests (`Thread.Sleep(2000)`) to verify parallelism provides speedup.
