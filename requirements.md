@@ -94,7 +94,7 @@ ParallelTestRunner/
 - **Description**: Create `tests/DummyTestProject/DummyTests.cs` with exactly 20 MSTest methods across multiple classes and namespaces. Include: passing tests, deliberately failing tests (controlled via `FAIL_TESTS` environment variable), `[DataRow]` parameterized tests, and a couple of slow tests (`Thread.Sleep(2000)`) to verify parallelism provides speedup.
 
 ### TASK-009: Unit tests for TestBatcher
-- **Status**: pending
+- **Status**: done
 - **Priority**: medium
 - **Dependencies**: TASK-004
 - **Description**: Create `TestBatcherTests.cs` with tests for: evenly divisible batching (10 tests, batch size 5 → 2 batches), remainder batching (11 tests, batch size 5 → 3 batches), batch size larger than test count (→ 1 batch), filter string length auto-split when exceeding 7000 char limit. TestBatcher is pure logic with no process dependencies, so unit tests are appropriate here.
