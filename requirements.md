@@ -64,7 +64,7 @@ ParallelTestRunner/
 - **Description**: Create `TestDiscovery.cs` with `DiscoverAsync(string projectPath, string[] extraArgs, CancellationToken ct)`. Runs `dotnet test <project> --list-tests --no-build [extraArgs]`, captures stdout, forwards stderr to `Console.Error` in real-time. Parses output by finding the sentinel line `"The following Tests are available:"` and collecting subsequent indented non-empty lines (trimmed). Deduplicates parameterized tests by stripping `(...)` suffix. Throws on non-zero exit code or zero tests found.
 
 ### TASK-004: Implement test batching
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-001
 - **Description**: Create `TestBatcher.cs` with `CreateBatches(IReadOnlyList<string> testNames, int batchSize)`. Uses `Chunk(batchSize)` to split tests into groups. Post-check: if any batch's filter string (`"FullyQualifiedName=X|FullyQualifiedName=Y|..."`) exceeds 7000 chars, auto-split that batch into smaller chunks to stay within Windows command-line length limits.
