@@ -3,7 +3,7 @@ namespace ParallelTestRunner;
 public static class TestBatcher
 {
     private const int MaxFilterLength = 7000;
-    private const string FilterPrefix = "FullyQualifiedName=";
+    private const string FilterPrefix = "FullyQualifiedName~";
     private const string FilterSeparator = "|";
 
     /// <summary>
