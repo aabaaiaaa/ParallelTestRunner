@@ -58,7 +58,7 @@ ParallelTestRunner/
 - **Description**: Create `Options.cs` as a record with: `ProjectPath` (required argument), `BatchSize` (default 50), `MaxParallelism` (default `Math.Max(1, Environment.ProcessorCount / 2)`), `ExtraDotnetTestArgs` (string[]), `ResultsDirectory` (string?). Create `Program.cs` with a `RootCommand` using System.CommandLine that maps CLI args to `Options`. Wire `Console.CancelKeyPress` to a `CancellationTokenSource` for graceful Ctrl+C. On startup, print an ASCII art banner for "Parallel Test Runner" to stderr, followed by detected core count and chosen parallelism. The banner should be a hardcoded string literal — no runtime generation or external dependency needed.
 
 ### TASK-003: Implement test discovery
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-001
 - **Description**: Create `TestDiscovery.cs` with `DiscoverAsync(string projectPath, string[] extraArgs, CancellationToken ct)`. Runs `dotnet test <project> --list-tests --no-build [extraArgs]`, captures stdout, forwards stderr to `Console.Error` in real-time. Parses output by finding the sentinel line `"The following Tests are available:"` and collecting subsequent indented non-empty lines (trimmed). Deduplicates parameterized tests by stripping `(...)` suffix. Throws on non-zero exit code or zero tests found.

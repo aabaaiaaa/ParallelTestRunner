@@ -16,7 +16,7 @@ using System.Reflection;
     " and runs multiple dotnet test processes in parallel with real-time output forwa" +
     "rding."))]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d84d5eec042595053d4348059256fb65b359e66c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+66930f767d9c575ec23ff543ee05fa6e58fb607b")]
 [assembly: System.Reflection.AssemblyProductAttribute("ParallelTestRunner")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ParallelTestRunner")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
