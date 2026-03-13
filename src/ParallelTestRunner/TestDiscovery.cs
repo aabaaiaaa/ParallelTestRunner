@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
@@ -33,13 +34,13 @@ public static partial class TestDiscovery
             EnableRaisingEvents = true,
         };
 
-        var stdoutLines = new List<string>();
+        var stdoutLines = new ConcurrentQueue<string>();
         var tcs = new TaskCompletionSource<int>();
 
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is not null)
-                stdoutLines.Add(e.Data);
+                stdoutLines.Enqueue(e.Data);
         };
 
         process.ErrorDataReceived += (_, e) =>
@@ -67,7 +68,7 @@ public static partial class TestDiscovery
             throw new InvalidOperationException(
                 $"dotnet test --list-tests exited with code {exitCode}.");
 
-        var tests = ParseDiscoveryOutput(stdoutLines);
+        var tests = ParseDiscoveryOutput(stdoutLines.ToList());
 
         if (tests.Count == 0)
             throw new InvalidOperationException(

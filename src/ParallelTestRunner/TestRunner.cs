@@ -37,7 +37,7 @@ public static class TestRunner
                     try
                     {
                         if (!proc.HasExited)
-                            proc.Kill();
+                            proc.Kill(entireProcessTree: true);
                     }
                     catch
                     {
@@ -128,7 +128,7 @@ public static class TestRunner
                 try
                 {
                     if (!process.HasExited)
-                        process.Kill();
+                        process.Kill(entireProcessTree: true);
                 }
                 catch
                 {

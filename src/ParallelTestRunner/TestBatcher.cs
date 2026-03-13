@@ -41,7 +41,10 @@ public static class TestBatcher
 
     /// <summary>
     /// Builds the <c>--filter</c> string for a batch of test names.
-    /// Format: <c>FullyQualifiedName=Test1|FullyQualifiedName=Test2|...</c>
+    /// Format: <c>FullyQualifiedName~Test1|FullyQualifiedName~Test2|...</c>
+    /// Uses <c>~</c> (contains) rather than <c>=</c> (equals) so that parameterised
+    /// test variants (whose FQN includes a <c>(...)</c> suffix) are matched by their
+    /// base name, which was deduplicated during discovery.
     /// </summary>
     internal static string BuildFilterString(IReadOnlyList<string> testNames)
     {

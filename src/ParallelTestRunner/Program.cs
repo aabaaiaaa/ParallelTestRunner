@@ -11,12 +11,24 @@ var batchSizeOption = new Option<int>("--batch-size")
     Description = "Number of tests per batch",
     DefaultValueFactory = _ => 50
 };
+batchSizeOption.Validators.Add(result =>
+{
+    var value = result.GetValue(batchSizeOption);
+    if (value < 1)
+        result.AddError("--batch-size must be at least 1.");
+});
 
 var maxParallelismOption = new Option<int>("--max-parallelism")
 {
     Description = "Maximum number of concurrent dotnet test processes",
     DefaultValueFactory = _ => Math.Max(1, Environment.ProcessorCount / 2)
 };
+maxParallelismOption.Validators.Add(result =>
+{
+    var value = result.GetValue(maxParallelismOption);
+    if (value < 1)
+        result.AddError("--max-parallelism must be at least 1.");
+});
 
 var resultsDirOption = new Option<string?>("--results-dir")
 {
@@ -42,6 +54,8 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
     Console.Error.WriteLine("Cancellation requested — stopping test processes...");
 };
+
+var toolExitCode = 0;
 
 rootCommand.SetAction(async (parseResult, cancellationToken) =>
 {
@@ -69,7 +83,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Discovery failed: {ex.Message}");
-        Environment.Exit(2);
+        toolExitCode = 2;
         return;
     }
 
@@ -83,13 +97,13 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Step 3: Run batches in parallel
     var results = await TestRunner.RunAllAsync(batches, options, cancellationToken);
 
-    // Step 4: Collate results and exit
-    var exitCode = ResultCollator.Collate(results);
-    Environment.Exit(exitCode);
+    // Step 4: Collate results
+    toolExitCode = ResultCollator.Collate(results);
 });
 
 var config = new CommandLineConfiguration(rootCommand);
-return await config.InvokeAsync(args, cts.Token);
+var parseExitCode = await config.InvokeAsync(args, cts.Token);
+return parseExitCode != 0 ? parseExitCode : toolExitCode;
 
 static void PrintBanner(Options options)
 {

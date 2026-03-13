@@ -33,6 +33,8 @@ src/ParallelTestRunner/          # Main tool (console app, packaged as dotnet to
 
 tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
   TestBatcherTests.cs            # 9 unit tests for batching logic
+  TestDiscoveryParseTests.cs     # 7 unit tests for discovery output parsing
+  ResultCollatorTests.cs         # 5 unit tests for result collation and exit codes
   IntegrationTests.cs            # 4 integration tests (discovery, batching, exit codes)
 
 tests/DummyTestProject/          # Fixture project with 20 tests across 4 namespaces

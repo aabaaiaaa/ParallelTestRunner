@@ -105,8 +105,8 @@ parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `<project>` | string | *(required)* | Path to the test project or solution |
-| `--batch-size` | int | `50` | Number of tests per batch |
-| `--max-parallelism` | int | `CPU cores / 2` | Maximum concurrent `dotnet test` processes |
+| `--batch-size` | int | `50` | Number of tests per batch (minimum 1) |
+| `--max-parallelism` | int | `CPU cores / 2` | Maximum concurrent `dotnet test` processes (minimum 1) |
 | `--results-dir` | string | *(none)* | Directory for `.trx` result files |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 
