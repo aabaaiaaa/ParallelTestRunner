@@ -53,8 +53,8 @@ public class TestBatcherTests
     public void CreateBatches_FilterStringExceedsLimit_AutoSplitsBatch()
     {
         // Create test names long enough that a batch of 10 exceeds the 7000-char filter limit.
-        // Each filter entry is "FullyQualifiedName~<name>|", so we need names that push past 7000.
-        // "FullyQualifiedName~" is 19 chars, separator "|" is 1 char.
+        // Each filter entry is "Name~<name>|", so we need names that push past 7000.
+        // "Name~" is 5 chars, separator "|" is 1 char.
         // Target: 10 tests in one batch that exceed 7000 chars total filter string.
         // Per entry: 19 + name.Length, plus 1 separator between entries.
         // For 10 entries: 10*(19 + nameLen) + 9 separators > 7000
@@ -120,6 +120,6 @@ public class TestBatcherTests
 
         var filter = TestBatcher.BuildFilterString(tests);
 
-        Assert.AreEqual("FullyQualifiedName~Ns.Class.TestA|FullyQualifiedName~Ns.Class.TestB", filter);
+        Assert.AreEqual("Name~Ns.Class.TestA|Name~Ns.Class.TestB", filter);
     }
 }

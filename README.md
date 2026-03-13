@@ -58,6 +58,12 @@ parallel-test-runner MyTests.csproj -- --configuration Release --no-restore
 
 # Write .trx result files
 parallel-test-runner MyTests.csproj --results-dir ./TestResults
+
+# Auto-tune batch size and parallelism based on test count and CPU cores
+parallel-test-runner MyTests.csproj --auto
+
+# Auto-tune with explicit override (shows recommendation but keeps your value)
+parallel-test-runner MyTests.csproj --auto --max-parallelism 4
 ```
 
 ## TeamCity Build Step Configuration
@@ -107,6 +113,7 @@ parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
 | `<project>` | string | *(required)* | Path to the test project or solution |
 | `--batch-size` | int | `50` | Number of tests per batch (minimum 1) |
 | `--max-parallelism` | int | `CPU cores / 2` | Maximum concurrent `dotnet test` processes (minimum 1) |
+| `--auto` | bool | `false` | Auto-tune batch size and parallelism based on test count and CPU cores |
 | `--results-dir` | string | *(none)* | Directory for `.trx` result files |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 

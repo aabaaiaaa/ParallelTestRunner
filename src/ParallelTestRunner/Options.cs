@@ -4,6 +4,7 @@ public record Options(
     string ProjectPath,
     int BatchSize = 50,
     int MaxParallelism = 0,
+    int MaxTests = 0,
     string[] ExtraDotnetTestArgs = default!,
     string? ResultsDirectory = null)
 {

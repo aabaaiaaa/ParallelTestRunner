@@ -30,9 +30,26 @@ maxParallelismOption.Validators.Add(result =>
         result.AddError("--max-parallelism must be at least 1.");
 });
 
+var maxTestsOption = new Option<int>("--max-tests")
+{
+    Description = "Maximum number of tests to run (0 = all)",
+    DefaultValueFactory = _ => 0
+};
+maxTestsOption.Validators.Add(result =>
+{
+    var value = result.GetValue(maxTestsOption);
+    if (value < 0)
+        result.AddError("--max-tests must be 0 or greater.");
+});
+
 var resultsDirOption = new Option<string?>("--results-dir")
 {
     Description = "Directory for .trx result files"
+};
+
+var autoOption = new Option<bool>("--auto")
+{
+    Description = "Auto-tune batch size and parallelism based on test count and CPU cores"
 };
 
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
@@ -40,7 +57,9 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     projectArg,
     batchSizeOption,
     maxParallelismOption,
+    maxTestsOption,
     resultsDirOption,
+    autoOption,
 };
 
 // Treat unmatched tokens as extra dotnet test args (passed after --)
@@ -62,13 +81,16 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var project = parseResult.GetValue(projectArg);
     var batchSize = parseResult.GetValue(batchSizeOption);
     var maxParallelism = parseResult.GetValue(maxParallelismOption);
+    var maxTests = parseResult.GetValue(maxTestsOption);
     var resultsDir = parseResult.GetValue(resultsDirOption);
+    var auto = parseResult.GetValue(autoOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
     var options = new Options(
         ProjectPath: project!,
         BatchSize: batchSize,
         MaxParallelism: maxParallelism,
+        MaxTests: maxTests,
         ExtraDotnetTestArgs: extraArgs,
         ResultsDirectory: resultsDir);
 
@@ -88,6 +110,39 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     }
 
     Console.Error.WriteLine($"  Discovered {tests.Count} tests");
+
+    // Truncate if --max-tests was specified
+    if (options.MaxTests > 0 && tests.Count > options.MaxTests)
+    {
+        tests = tests.Take(options.MaxTests).ToList();
+        Console.Error.WriteLine($"  Limited to {tests.Count} tests (--max-tests {options.MaxTests})");
+    }
+
+    // Auto-tune batch size and parallelism if --auto is specified
+    if (auto && tests.Count > 0)
+    {
+        var avgNameLength = tests.Average(t => (double)t.Length);
+        var (autoBatchSize, autoParallelism) = AutoTuner.Calculate(
+            tests.Count, Environment.ProcessorCount, avgNameLength);
+
+        var batchSizeExplicit = parseResult.GetResult(batchSizeOption)?.Implicit == false;
+        var parallelismExplicit = parseResult.GetResult(maxParallelismOption)?.Implicit == false;
+
+        if (batchSizeExplicit || parallelismExplicit)
+        {
+            Console.Error.WriteLine($"  Auto-tune recommendation: batch-size={autoBatchSize}, parallelism={autoParallelism}");
+            Console.Error.WriteLine($"    Reason: {tests.Count} tests across {autoParallelism} CPU slots (cores/2), 2x batches for load balancing");
+            var overrides = new List<string>();
+            if (batchSizeExplicit) overrides.Add($"--batch-size {options.BatchSize}");
+            if (parallelismExplicit) overrides.Add($"--max-parallelism {options.MaxParallelism}");
+            Console.Error.WriteLine($"    You specified: {string.Join(", ", overrides)} (keeping your values)");
+        }
+        else
+        {
+            options = options with { BatchSize = autoBatchSize, MaxParallelism = autoParallelism };
+            Console.Error.WriteLine($"  Auto-tuned: batch-size={autoBatchSize}, parallelism={autoParallelism}");
+        }
+    }
 
     // Step 2: Batch tests
     var batches = TestBatcher.CreateBatches(tests, options.BatchSize);

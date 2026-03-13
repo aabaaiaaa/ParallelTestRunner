@@ -68,9 +68,9 @@ public class TestDiscoveryParseTests
         var lines = new List<string>
         {
             "The following Tests are available:",
-            "    Ns.Cls.Add(1,2,3)",
-            "    Ns.Cls.Add(4,5,9)",
-            "    Ns.Cls.Add(0,0,0)",
+            "    Ns.Cls.Add (1,2,3)",
+            "    Ns.Cls.Add (4,5,9)",
+            "    Ns.Cls.Add (0,0,0)",
             "    Ns.Cls.Subtract",
         };
 

@@ -28,6 +28,7 @@ src/ParallelTestRunner/          # Main tool (console app, packaged as dotnet to
   Options.cs                     # Immutable record for configuration
   TestDiscovery.cs               # Runs `dotnet test --list-tests --no-build`, parses output
   TestBatcher.cs                 # Splits tests into batches, respects filter length limit
+  AutoTuner.cs                   # Calculates optimal batch size and parallelism for --auto flag
   TestRunner.cs                  # Runs batches in parallel with SemaphoreSlim throttling
   ResultCollator.cs              # Summarises results, determines exit code
 
@@ -35,6 +36,7 @@ tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
   TestBatcherTests.cs            # 9 unit tests for batching logic
   TestDiscoveryParseTests.cs     # 7 unit tests for discovery output parsing
   ResultCollatorTests.cs         # 5 unit tests for result collation and exit codes
+  AutoTunerTests.cs              # 10 unit tests for auto-tuning logic
   IntegrationTests.cs            # 4 integration tests (discovery, batching, exit codes)
 
 tests/DummyTestProject/          # Fixture project with 20 tests across 4 namespaces
@@ -59,7 +61,7 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 | Default batch size | 50 | Options.cs |
 | Default max parallelism | `ProcessorCount / 2` (min 1) | Options.cs |
 | Discovery sentinel | `"The following Tests are available:"` | TestDiscovery.cs |
-| Filter format | `FullyQualifiedName~Test1\|FullyQualifiedName~Test2` | TestBatcher.cs |
+| Filter format | `Name~Test1\|Name~Test2` | TestBatcher.cs |
 
 ## Exit Codes
 

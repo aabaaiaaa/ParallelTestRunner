@@ -8,13 +8,16 @@ public static partial class TestDiscovery
 {
     private const string Sentinel = "The following Tests are available:";
 
-    [GeneratedRegex(@"\(.*\)$")]
+    // Matches a trailing parenthesised suffix, e.g. ' ("abc","cba")' or ' (1,2,3)'.
+    // Used to deduplicate parameterised test variants reported by --list-tests, since
+    // the VSTest filter parser cannot handle parentheses/commas in Name= filters.
+    [GeneratedRegex(@"\s*\(.*\)$")]
     private static partial Regex ParameterSuffixRegex();
 
     /// <summary>
     /// Discovers tests by running <c>dotnet test --list-tests --no-build</c> and parsing the output.
     /// </summary>
-    /// <returns>A deduplicated list of fully-qualified test names.</returns>
+    /// <returns>A deduplicated list of test names (parameterised suffixes stripped).</returns>
     public static async Task<IReadOnlyList<string>> DiscoverAsync(
         string projectPath, string[] extraArgs, CancellationToken ct)
     {
@@ -122,7 +125,8 @@ public static partial class TestDiscovery
             if (trimmed.Length == 0)
                 continue;
 
-            // Deduplicate parameterized tests by stripping (...) suffix
+            // Strip parameterised suffix so variants are deduplicated into one entry.
+            // This is necessary because the VSTest filter parser chokes on ( ) , in names.
             var deduped = ParameterSuffixRegex().Replace(trimmed, "");
 
             if (seen.Add(deduped))
