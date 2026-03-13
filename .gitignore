@@ -9,6 +9,8 @@ dist/
 build/
 out/
 *.tsbuildinfo
+bin/
+obj/
 
 # Environment files
 .env
