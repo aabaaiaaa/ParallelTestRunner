@@ -6,7 +6,8 @@ public record Options(
     int MaxParallelism = 0,
     int MaxTests = 0,
     string[] ExtraDotnetTestArgs = default!,
-    string? ResultsDirectory = null)
+    string? ResultsDirectory = null,
+    TimeSpan IdleTimeout = default)
 {
     public int MaxParallelism { get; init; } = MaxParallelism > 0
         ? MaxParallelism

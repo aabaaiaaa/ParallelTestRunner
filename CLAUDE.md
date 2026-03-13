@@ -30,14 +30,16 @@ src/ParallelTestRunner/          # Main tool (console app, packaged as dotnet to
   TestBatcher.cs                 # Splits tests into batches, respects filter length limit
   AutoTuner.cs                   # Calculates optimal batch size and parallelism for --auto flag
   TestRunner.cs                  # Runs batches in parallel with SemaphoreSlim throttling
+  HangDetector.cs                # Binary-split hang detection for timed-out batches
   ResultCollator.cs              # Summarises results, determines exit code
 
 tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
   TestBatcherTests.cs            # 9 unit tests for batching logic
   TestDiscoveryParseTests.cs     # 7 unit tests for discovery output parsing
-  ResultCollatorTests.cs         # 5 unit tests for result collation and exit codes
+  ResultCollatorTests.cs         # 7 unit tests for result collation and exit codes
   AutoTunerTests.cs              # 10 unit tests for auto-tuning logic
-  IntegrationTests.cs            # 4 integration tests (discovery, batching, exit codes)
+  HangDetectorTests.cs           # 6 unit tests for binary-split hang detection
+  IntegrationTests.cs            # 15 integration tests (discovery, batching, exit codes, hang detection)
 
 tests/DummyTestProject/          # Fixture project with 20 tests across 4 namespaces
   DummyTests.cs                  # Includes parameterised, slow, and conditionally-failing tests
@@ -45,11 +47,12 @@ tests/DummyTestProject/          # Fixture project with 20 tests across 4 namesp
 
 ## Architecture
 
-The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Result collation**.
+The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Hang detection (if timeouts) → Result collation**.
 
 - **Discovery**: Spawns `dotnet test --list-tests --no-build`, parses output after the sentinel line `"The following Tests are available:"`. Deduplicates parameterised tests using source-generated regex to strip `(...)` suffixes.
 - **Batching**: Chunks tests by batch size, then auto-splits any chunk whose `FullyQualifiedName~...|FullyQualifiedName~...` filter string exceeds `MaxFilterLength` (7000 chars).
 - **Execution**: `SemaphoreSlim(maxParallelism)` throttles concurrent `dotnet test` processes. Each process uses event-based async output (OutputDataReceived/ErrorDataReceived) with lock-protected console writes to prevent interleaving. Process lifecycle is wrapped in `TaskCompletionSource` for async-friendly waiting.
+- **Hang Detection**: After execution, any timed-out batches are fed into `HangDetector` which recursively binary-splits test lists and re-runs them to isolate specific hanging tests. Max recursion depth of 10. Accepts a `Func<>` for the batch runner to enable unit testing with fakes.
 - **Cancellation**: `CancellationTokenSource` propagates Ctrl+C through all layers, killing spawned process trees gracefully.
 - **TeamCity**: Auto-detected via `TEAMCITY_VERSION` env var — appends `/TestAdapterPath:. /Logger:teamcity` when present.
 
@@ -62,6 +65,8 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 | Default max parallelism | `ProcessorCount / 2` (min 1) | Options.cs |
 | Discovery sentinel | `"The following Tests are available:"` | TestDiscovery.cs |
 | Filter format | `Name~Test1\|Name~Test2` | TestBatcher.cs |
+| Default idle timeout | 180s | Program.cs |
+| Hang detection max depth | 10 | HangDetector.cs |
 
 ## Exit Codes
 
@@ -75,6 +80,7 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 |---|---|
 | `TEAMCITY_VERSION` | Enables TeamCity logger adapter automatically |
 | `FAIL_TESTS` | DummyTestProject: triggers deliberate failures for testing |
+| `HANG_TEST` | DummyTestProject: triggers a 30-minute blocking test for hang detection testing |
 
 ## Conventions
 

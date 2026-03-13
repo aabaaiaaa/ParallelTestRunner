@@ -168,6 +168,54 @@ namespace DummyTestProject.Collections
     }
 }
 
+namespace DummyTestProject.LongNamedTests
+{
+    [TestClass]
+    public class VeryLongTestNameClass_ForFilterStringStressTesting
+    {
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_001() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_002() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_003() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_004() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_005() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_006() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_007() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_008() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_009() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_010() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_011() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_012() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_013() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_014() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_015() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_016() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_017() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_018() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_019() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_020() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_021() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_022() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_023() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_024() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_025() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_026() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_027() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_028() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_029() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_030() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_031() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_032() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_033() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_034() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_035() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_036() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_037() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_038() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_039() => Assert.IsTrue(true);
+        [TestMethod] public void Verification_Of_Customer_Account_Registration_With_Full_Address_And_PostCode_Validation_Scenario_040() => Assert.IsTrue(true);
+    }
+}
+
 namespace DummyTestProject.Performance
 {
     [TestClass]
@@ -184,6 +232,18 @@ namespace DummyTestProject.Performance
         public void SlowTest_Two()
         {
             Thread.Sleep(2000);
+            Assert.IsTrue(true);
+        }
+
+        [TestMethod]
+        public void HangingTest_ConditionalBlock()
+        {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HANG_TEST")))
+            {
+                // Simulate a hanging test — blocks until cancelled
+                Thread.Sleep(TimeSpan.FromMinutes(30));
+            }
+
             Assert.IsTrue(true);
         }
     }

@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace ParallelTestRunner;
 
-public record BatchResult(int BatchIndex, int TestCount, int ExitCode);
+public record BatchResult(int BatchIndex, int TestCount, int ExitCode, bool TimedOut = false, IReadOnlyList<string>? CapturedOutput = null);
 
 public static class TestRunner
 {
@@ -50,6 +50,21 @@ public static class TestRunner
         }
     }
 
+    /// <summary>
+    /// Runs a single batch without semaphore management. Used by HangDetector for diagnostic re-runs.
+    /// </summary>
+    internal static async Task<BatchResult> RunSingleBatchAsync(
+        IReadOnlyList<string> batch,
+        int batchIndex,
+        Options options,
+        CancellationToken ct)
+    {
+        using var semaphore = new SemaphoreSlim(1);
+        var trackedProcesses = new List<Process>();
+        var processLock = new object();
+        return await RunBatchAsync(batch, batchIndex, options, semaphore, trackedProcesses, processLock, ct);
+    }
+
     private static async Task<BatchResult> RunBatchAsync(
         IReadOnlyList<string> batch,
         int batchIndex,
@@ -78,6 +93,9 @@ public static class TestRunner
             using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 
             var tcs = new TaskCompletionSource<int>();
+            var outputLines = new List<string>();
+            var outputLock = new object();
+            long lastOutputTicks = Stopwatch.GetTimestamp();
 
             process.Exited += (_, _) =>
             {
@@ -95,6 +113,13 @@ public static class TestRunner
             {
                 if (e.Data is not null)
                 {
+                    Interlocked.Exchange(ref lastOutputTicks, Stopwatch.GetTimestamp());
+
+                    lock (outputLock)
+                    {
+                        outputLines.Add(e.Data);
+                    }
+
                     lock (ConsoleLock)
                     {
                         Console.WriteLine(e.Data);
@@ -106,6 +131,13 @@ public static class TestRunner
             {
                 if (e.Data is not null)
                 {
+                    Interlocked.Exchange(ref lastOutputTicks, Stopwatch.GetTimestamp());
+
+                    lock (outputLock)
+                    {
+                        outputLines.Add($"[stderr] {e.Data}");
+                    }
+
                     lock (ConsoleLock)
                     {
                         Console.Error.WriteLine(e.Data);
@@ -135,6 +167,49 @@ public static class TestRunner
                     // Process may have already exited
                 }
             });
+
+            // Monitor for idle timeout — kill the batch if no output for IdleTimeout duration
+            if (options.IdleTimeout > TimeSpan.Zero)
+            {
+                var idleCheckInterval = TimeSpan.FromSeconds(Math.Min(5, options.IdleTimeout.TotalSeconds / 2));
+
+                while (!tcs.Task.IsCompleted)
+                {
+                    var delayTask = Task.Delay(idleCheckInterval, ct);
+                    var completedTask = await Task.WhenAny(tcs.Task, delayTask);
+
+                    if (completedTask == tcs.Task)
+                        break;
+
+                    var elapsed = Stopwatch.GetElapsedTime(Interlocked.Read(ref lastOutputTicks));
+                    if (elapsed >= options.IdleTimeout)
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                                process.Kill(entireProcessTree: true);
+                        }
+                        catch
+                        {
+                            // Process may have already exited
+                        }
+
+                        List<string> snapshot;
+                        lock (outputLock)
+                        {
+                            snapshot = [.. outputLines];
+                        }
+
+                        lock (ConsoleLock)
+                        {
+                            Console.Error.WriteLine();
+                            Console.Error.WriteLine($"  *** Batch {batchIndex} IDLE TIMEOUT — no output for {elapsed.TotalSeconds:F0}s ***");
+                        }
+
+                        return new BatchResult(batchIndex, batch.Count, -1, TimedOut: true, CapturedOutput: snapshot);
+                    }
+                }
+            }
 
             var exitCode = await tcs.Task;
             ct.ThrowIfCancellationRequested();

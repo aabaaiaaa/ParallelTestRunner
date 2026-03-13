@@ -42,10 +42,34 @@ maxTestsOption.Validators.Add(result =>
         result.AddError("--max-tests must be 0 or greater.");
 });
 
+var skipTestsOption = new Option<int>("--skip-tests")
+{
+    Description = "Number of tests to skip from the start of the discovered list",
+    DefaultValueFactory = _ => 0
+};
+skipTestsOption.Validators.Add(result =>
+{
+    var value = result.GetValue(skipTestsOption);
+    if (value < 0)
+        result.AddError("--skip-tests must be 0 or greater.");
+});
+
 var resultsDirOption = new Option<string?>("--results-dir")
 {
     Description = "Directory for .trx result files"
 };
+
+var idleTimeoutOption = new Option<int>("--idle-timeout")
+{
+    Description = "Kill a batch if no output is received for this many seconds (0 = no timeout)",
+    DefaultValueFactory = _ => 180
+};
+idleTimeoutOption.Validators.Add(result =>
+{
+    var value = result.GetValue(idleTimeoutOption);
+    if (value < 0)
+        result.AddError("--idle-timeout must be 0 or greater.");
+});
 
 var autoOption = new Option<bool>("--auto")
 {
@@ -58,7 +82,9 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     batchSizeOption,
     maxParallelismOption,
     maxTestsOption,
+    skipTestsOption,
     resultsDirOption,
+    idleTimeoutOption,
     autoOption,
 };
 
@@ -82,9 +108,18 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var batchSize = parseResult.GetValue(batchSizeOption);
     var maxParallelism = parseResult.GetValue(maxParallelismOption);
     var maxTests = parseResult.GetValue(maxTestsOption);
+    var skipTests = parseResult.GetValue(skipTestsOption);
     var resultsDir = parseResult.GetValue(resultsDirOption);
+    var idleTimeout = parseResult.GetValue(idleTimeoutOption);
     var auto = parseResult.GetValue(autoOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
+
+    // Create a timestamped subfolder for results so runs don't collide
+    if (resultsDir is not null)
+    {
+        resultsDir = Path.Combine(resultsDir, $"run_{DateTime.Now:yyyyMMddTHHmmss}");
+        Directory.CreateDirectory(resultsDir);
+    }
 
     var options = new Options(
         ProjectPath: project!,
@@ -92,7 +127,8 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         MaxParallelism: maxParallelism,
         MaxTests: maxTests,
         ExtraDotnetTestArgs: extraArgs,
-        ResultsDirectory: resultsDir);
+        ResultsDirectory: resultsDir,
+        IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
 
     PrintBanner(options);
 
@@ -111,11 +147,25 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 
     Console.Error.WriteLine($"  Discovered {tests.Count} tests");
 
+    // Skip tests if --skip-tests was specified
+    if (skipTests > 0)
+    {
+        tests = tests.Skip(skipTests).ToList();
+        Console.Error.WriteLine($"  Skipped first {skipTests} tests, {tests.Count} remaining");
+    }
+
     // Truncate if --max-tests was specified
     if (options.MaxTests > 0 && tests.Count > options.MaxTests)
     {
         tests = tests.Take(options.MaxTests).ToList();
         Console.Error.WriteLine($"  Limited to {tests.Count} tests (--max-tests {options.MaxTests})");
+    }
+
+    if (tests.Count == 0)
+    {
+        Console.Error.WriteLine("  No tests to run after applying skip/max-tests filters.");
+        toolExitCode = 2;
+        return;
     }
 
     // Auto-tune batch size and parallelism if --auto is specified
@@ -152,8 +202,18 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Step 3: Run batches in parallel
     var results = await TestRunner.RunAllAsync(batches, options, cancellationToken);
 
+    // Step 3.5: If any batches timed out, run hang detection to isolate specific tests
+    HangDetectionResult? hangDetection = null;
+    if (results.Any(r => r.TimedOut))
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("========== Hang Detection ==========");
+        Console.Error.WriteLine("  Some batches timed out — running binary-split detection to isolate hanging tests...");
+        hangDetection = await HangDetector.DetectAsync(results, batches, options, cancellationToken);
+    }
+
     // Step 4: Collate results
-    toolExitCode = ResultCollator.Collate(results);
+    toolExitCode = ResultCollator.Collate(results, hangDetection);
 });
 
 var config = new CommandLineConfiguration(rootCommand);
@@ -175,5 +235,8 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(banner);
     Console.Error.WriteLine($"  Detected cores: {Environment.ProcessorCount}");
     Console.Error.WriteLine($"  Chosen parallelism: {options.MaxParallelism}");
+    Console.Error.WriteLine($"  Idle timeout: {(options.IdleTimeout > TimeSpan.Zero ? $"{options.IdleTimeout.TotalSeconds:F0}s" : "none")}");
+    if (options.ResultsDirectory is not null)
+        Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();
 }
