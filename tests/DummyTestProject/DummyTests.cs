@@ -1,3 +1,7 @@
+using System.Runtime.CompilerServices;
+
+[assembly: Parallelize(Workers = 4, Scope = ExecutionScope.MethodLevel)]
+
 namespace DummyTestProject.Arithmetic
 {
     [TestClass]
@@ -38,6 +42,32 @@ namespace DummyTestProject.Arithmetic
         public void Division_Parameterized(int a, int b, int expected)
         {
             Assert.AreEqual(expected, a / b);
+        }
+    }
+
+    [TestClass]
+    public class TransientFailureTests
+    {
+        [TestMethod]
+        public void TransientFailure_FailsOnceThenPasses()
+        {
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FAIL_ONCE")))
+            {
+                Assert.IsTrue(true);
+                return;
+            }
+
+            var markerPath = Path.Combine(Path.GetTempPath(), "parallel_test_runner_fail_once.marker");
+            if (!File.Exists(markerPath))
+            {
+                File.WriteAllText(markerPath, "failed");
+                Assert.Fail("FAIL_ONCE: first run — deliberate transient failure");
+            }
+            else
+            {
+                File.Delete(markerPath);
+                Assert.IsTrue(true);
+            }
         }
     }
 
@@ -216,6 +246,80 @@ namespace DummyTestProject.LongNamedTests
     }
 }
 
+namespace DummyTestProject.Concurrency
+{
+    /// <summary>
+    /// These tests detect if they are running in parallel. They sleep and check a shared counter.
+    /// With [assembly: Parallelize(Workers = 4)], these would FAIL if run via plain dotnet test.
+    /// The ParallelTestRunner tool forces Workers=1, so they should PASS through the tool.
+    /// </summary>
+    [TestClass]
+    public class SequentialExecutionTests
+    {
+        private static int _concurrentCount;
+
+        [TestMethod]
+        public void SequentialCheck_A()
+        {
+            var count = Interlocked.Increment(ref _concurrentCount);
+            try
+            {
+                Assert.AreEqual(1, count, $"Expected 1 concurrent test but found {count} — tests are running in parallel!");
+                Thread.Sleep(100);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _concurrentCount);
+            }
+        }
+
+        [TestMethod]
+        public void SequentialCheck_B()
+        {
+            var count = Interlocked.Increment(ref _concurrentCount);
+            try
+            {
+                Assert.AreEqual(1, count, $"Expected 1 concurrent test but found {count} — tests are running in parallel!");
+                Thread.Sleep(100);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _concurrentCount);
+            }
+        }
+
+        [TestMethod]
+        public void SequentialCheck_C()
+        {
+            var count = Interlocked.Increment(ref _concurrentCount);
+            try
+            {
+                Assert.AreEqual(1, count, $"Expected 1 concurrent test but found {count} — tests are running in parallel!");
+                Thread.Sleep(100);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _concurrentCount);
+            }
+        }
+
+        [TestMethod]
+        public void SequentialCheck_D()
+        {
+            var count = Interlocked.Increment(ref _concurrentCount);
+            try
+            {
+                Assert.AreEqual(1, count, $"Expected 1 concurrent test but found {count} — tests are running in parallel!");
+                Thread.Sleep(100);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _concurrentCount);
+            }
+        }
+    }
+}
+
 namespace DummyTestProject.Performance
 {
     [TestClass]
@@ -224,14 +328,14 @@ namespace DummyTestProject.Performance
         [TestMethod]
         public void SlowTest_One()
         {
-            Thread.Sleep(2000);
+            Thread.Sleep(200);
             Assert.IsTrue(true);
         }
 
         [TestMethod]
         public void SlowTest_Two()
         {
-            Thread.Sleep(2000);
+            Thread.Sleep(200);
             Assert.IsTrue(true);
         }
 
@@ -240,8 +344,8 @@ namespace DummyTestProject.Performance
         {
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HANG_TEST")))
             {
-                // Simulate a hanging test — blocks until cancelled
-                Thread.Sleep(TimeSpan.FromMinutes(30));
+                // Simulate a hanging test — blocks until idle timeout kills it
+                Thread.Sleep(TimeSpan.FromSeconds(30));
             }
 
             Assert.IsTrue(true);

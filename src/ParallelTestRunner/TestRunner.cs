@@ -229,6 +229,7 @@ public static class TestRunner
             "test",
             Quote(options.ProjectPath),
             "--no-build",
+            "-v", "normal",
             "--filter",
             Quote(filterString)
         };
@@ -254,6 +255,11 @@ public static class TestRunner
         {
             args.Add(extra);
         }
+
+        // Force sequential execution within each batch — parallelism is managed
+        // at the process level by this tool, not within dotnet test
+        args.Add("--");
+        args.Add("MSTest.Parallelize.Workers=1");
 
         return string.Join(" ", args);
     }

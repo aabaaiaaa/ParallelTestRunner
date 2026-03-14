@@ -62,13 +62,25 @@ var resultsDirOption = new Option<string?>("--results-dir")
 var idleTimeoutOption = new Option<int>("--idle-timeout")
 {
     Description = "Kill a batch if no output is received for this many seconds (0 = no timeout)",
-    DefaultValueFactory = _ => 180
+    DefaultValueFactory = _ => 60
 };
 idleTimeoutOption.Validators.Add(result =>
 {
     var value = result.GetValue(idleTimeoutOption);
     if (value < 0)
         result.AddError("--idle-timeout must be 0 or greater.");
+});
+
+var retriesOption = new Option<int>("--retries")
+{
+    Description = "Number of times to retry failed batches (0 = no retries)",
+    DefaultValueFactory = _ => 2
+};
+retriesOption.Validators.Add(result =>
+{
+    var value = result.GetValue(retriesOption);
+    if (value < 0)
+        result.AddError("--retries must be 0 or greater.");
 });
 
 var autoOption = new Option<bool>("--auto")
@@ -85,6 +97,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     skipTestsOption,
     resultsDirOption,
     idleTimeoutOption,
+    retriesOption,
     autoOption,
 };
 
@@ -111,6 +124,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var skipTests = parseResult.GetValue(skipTestsOption);
     var resultsDir = parseResult.GetValue(resultsDirOption);
     var idleTimeout = parseResult.GetValue(idleTimeoutOption);
+    var retries = parseResult.GetValue(retriesOption);
     var auto = parseResult.GetValue(autoOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
@@ -126,6 +140,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         BatchSize: batchSize,
         MaxParallelism: maxParallelism,
         MaxTests: maxTests,
+        Retries: retries,
         ExtraDotnetTestArgs: extraArgs,
         ResultsDirectory: resultsDir,
         IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
@@ -212,6 +227,38 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         hangDetection = await HangDetector.DetectAsync(results, batches, options, cancellationToken);
     }
 
+    // Step 3.75: Retry failed batches
+    if (options.Retries > 0)
+    {
+        for (var retry = 1; retry <= options.Retries; retry++)
+        {
+            var failedIndices = results
+                .Select((r, i) => (Result: r, Index: i))
+                .Where(x => x.Result.ExitCode != 0)
+                .Select(x => x.Index)
+                .ToList();
+
+            if (failedIndices.Count == 0)
+                break;
+
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"========== Retry {retry}/{options.Retries} ==========");
+            Console.Error.WriteLine($"  Re-running {failedIndices.Count} failed batch(es)...");
+
+            var failedBatches = failedIndices.Select(i => batches[i]).ToList();
+            var retryResults = await TestRunner.RunAllAsync(failedBatches, options, cancellationToken);
+
+            for (var j = 0; j < failedIndices.Count; j++)
+            {
+                var originalIndex = failedIndices[j];
+                results[originalIndex] = retryResults[j] with { BatchIndex = originalIndex };
+            }
+
+            var stillFailed = retryResults.Count(r => r.ExitCode != 0);
+            Console.Error.WriteLine($"  Retry {retry}/{options.Retries}: {retryResults.Length - stillFailed}/{retryResults.Length} batch(es) recovered, {stillFailed} still failing");
+        }
+    }
+
     // Step 4: Collate results
     toolExitCode = ResultCollator.Collate(results, hangDetection);
 });
@@ -236,6 +283,7 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine($"  Detected cores: {Environment.ProcessorCount}");
     Console.Error.WriteLine($"  Chosen parallelism: {options.MaxParallelism}");
     Console.Error.WriteLine($"  Idle timeout: {(options.IdleTimeout > TimeSpan.Zero ? $"{options.IdleTimeout.TotalSeconds:F0}s" : "none")}");
+    Console.Error.WriteLine($"  Retries: {options.Retries}");
     if (options.ResultsDirectory is not null)
         Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();

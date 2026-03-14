@@ -5,6 +5,7 @@ public record Options(
     int BatchSize = 50,
     int MaxParallelism = 0,
     int MaxTests = 0,
+    int Retries = 2,
     string[] ExtraDotnetTestArgs = default!,
     string? ResultsDirectory = null,
     TimeSpan IdleTimeout = default)
