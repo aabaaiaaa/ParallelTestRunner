@@ -64,11 +64,22 @@ public static class ResultCollator
             }
         }
 
-        if (retryResult is not null && retryResult.HangingTests.Count == 0 && retryResult.SuspectedHangingTests.Count == 0
-            && retryResult.RetryRoundsPerformed > 0)
+        if (retryResult is { PersistentFailures.Count: > 0 })
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no hanging tests detected.");
+            Console.Error.WriteLine("========== Persistent Failures ==========");
+            Console.Error.WriteLine($"  These tests failed in every retry round:");
+            foreach (var test in retryResult.PersistentFailures)
+            {
+                Console.Error.WriteLine($"    - {test}");
+            }
+        }
+
+        if (retryResult is not null && retryResult.HangingTests.Count == 0 && retryResult.SuspectedHangingTests.Count == 0
+            && retryResult.PersistentFailures.Count == 0 && retryResult.RetryRoundsPerformed > 0)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no issues detected.");
         }
 
         if (failedBatches.Length > 0)

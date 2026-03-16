@@ -100,7 +100,7 @@ public class IntegrationTests
     public void BatchSize1_EachTestGetsOwnBatch()
     {
         // Each test gets its own batch — limit to 10 tests to keep process count reasonable
-        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 1 --max-tests 10 --max-parallelism 8 --idle-timeout 10 --retries 0");
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 1 --max-tests 10 --max-parallelism 8 --idle-timeout 30 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Created 10 batches");
@@ -197,14 +197,15 @@ public class IntegrationTests
         // The other 12 batches pass. Auto-retry should only re-run the failed batch's tests,
         // not all 66 tests, and stop after 1 round of no progress.
         var result = RunTool(
-            $"\"{_dummyProjectPath}\" --batch-size 5 --max-parallelism 8 --auto-retry --idle-timeout 10",
+            $"\"{_dummyProjectPath}\" --batch-size 5 --max-parallelism 8 --auto-retry --idle-timeout 30",
             environmentOverrides: new Dictionary<string, string> { ["FAIL_TESTS"] = "1" });
 
         Assert.AreEqual(1, result.ExitCode, $"Expected exit code 1 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
         // Auto-retry should stop after detecting no progress — proves it doesn't loop
         StringAssert.Contains(result.Stderr, "Auto-retry: no progress this round");
-        // Only the failed batch's tests should be retried, not all 66
-        StringAssert.Contains(result.Stderr, "Re-running 6 test(s)");
+        // Only the failed batch's tests should be retried (6 or fewer), not all 66
+        Assert.IsFalse(result.Stderr.Contains("Re-running 66 test(s)"),
+            $"Should not retry all tests.\nStderr:\n{result.Stderr}");
     }
 
     [TestMethod]

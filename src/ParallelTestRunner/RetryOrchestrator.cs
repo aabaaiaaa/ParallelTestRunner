@@ -5,6 +5,7 @@ namespace ParallelTestRunner;
 public record RetryResult(
     IReadOnlyList<string> HangingTests,
     IReadOnlyList<string> SuspectedHangingTests,
+    IReadOnlyList<string> PersistentFailures,
     int RetryRoundsPerformed);
 
 public static partial class RetryOrchestrator
@@ -39,6 +40,8 @@ public static partial class RetryOrchestrator
         var confirmedHangers = new HashSet<string>();
         var suspectedHangers = new HashSet<string>();
         var resolvedTests = new HashSet<string>(); // Tests that passed solo — never retry again
+        var persistentFailures = new HashSet<string>(); // Tests that fail every round
+        var previousRoundFailures = new HashSet<string>(); // Track failures across rounds
         var round = 0;
 
         while (true)
@@ -103,18 +106,21 @@ public static partial class RetryOrchestrator
                 retryPool.AddRange(originalBatches[results[idx].BatchIndex]);
             }
 
-            // Remove known/suspected hangers and resolved tests from retry pool
+            // Remove known/suspected hangers, resolved tests, and persistent failures from retry pool
             retryPool = retryPool
-                .Where(t => !confirmedHangers.Contains(t) && !suspectedHangers.Contains(t) && !resolvedTests.Contains(t))
+                .Where(t => !confirmedHangers.Contains(t) && !suspectedHangers.Contains(t)
+                    && !resolvedTests.Contains(t) && !persistentFailures.Contains(t))
                 .Distinct()
                 .ToList();
 
             var retryLabel = options.AutoRetry ? $"Retry {round}" : $"Retry {round}/{options.Retries}";
 
-            // Run failure retries at full parallelism
+            // Run failure retries at full parallelism with smaller batches to maximize
+            // worker utilization and reduce timeout risk for slow tests
             if (retryPool.Count > 0)
             {
-                var retryBatches = TestBatcher.CreateBatches(retryPool, options.BatchSize);
+                var retryBatchSize = Math.Max(5, retryPool.Count / options.MaxParallelism);
+                var retryBatches = TestBatcher.CreateBatches(retryPool, retryBatchSize);
 
                 Console.Error.WriteLine();
                 Console.Error.WriteLine($"========== {retryLabel} ==========");
@@ -141,8 +147,19 @@ public static partial class RetryOrchestrator
                     }
                     else
                     {
+                        // Parse output to identify which specific tests passed/failed
+                        // rather than marking all tests in a failed batch as failed
+                        var (cp, cf, _) = ParseTimedOutOutput(retryResults[j].CapturedOutput, retryBatches[j]);
+                        foreach (var t in cp) passedTests.Add(t);
+                        foreach (var t in cf) failedTests.Add(t);
+                        // Tests not in either list (no output captured) count as failed
+                        var accounted = new HashSet<string>(cp);
+                        accounted.UnionWith(cf);
                         foreach (var t in retryBatches[j])
-                            failedTests.Add(t);
+                        {
+                            if (!accounted.Contains(t))
+                                failedTests.Add(t);
+                        }
                     }
                 }
 
@@ -159,19 +176,39 @@ public static partial class RetryOrchestrator
                     }
                 }
 
+                // Track persistent failures — tests that fail every round
+                var thisRoundFailures = new HashSet<string>(failedTests);
+                if (previousRoundFailures.Count > 0)
+                {
+                    // Tests that failed both this round and last round
+                    var consecutive = thisRoundFailures.Intersect(previousRoundFailures).ToList();
+                    foreach (var t in consecutive)
+                    {
+                        persistentFailures.Add(t);
+                        Console.Error.WriteLine($"  Persistent failure: {t}");
+                    }
+                }
+                previousRoundFailures = thisRoundFailures;
+
                 // Update original batch results based on retry outcomes
                 for (var i = 0; i < results.Length; i++)
                 {
                     if (results[i].ExitCode == 0) continue;
 
                     var batchTests = originalBatches[results[i].BatchIndex];
-                    var allPassed = batchTests.All(t =>
+                    var allAccountedFor = batchTests.All(t =>
                         passedTests.Contains(t) ||
                         resolvedTests.Contains(t) ||
+                        persistentFailures.Contains(t) ||
                         confirmedHangers.Contains(t) ||
                         suspectedHangers.Contains(t));
 
-                    if (allPassed && !batchTests.Any(t => confirmedHangers.Contains(t)))
+                    // Mark batch as passing only if all tests are accounted for
+                    // and none are confirmed hangers or persistent failures
+                    var hasUnrecoverable = batchTests.Any(t =>
+                        confirmedHangers.Contains(t) || persistentFailures.Contains(t));
+
+                    if (allAccountedFor && !hasUnrecoverable)
                     {
                         results[i] = results[i] with { ExitCode = 0, TimedOut = false };
                     }
@@ -181,7 +218,7 @@ public static partial class RetryOrchestrator
                 var totalFailing = results.Length - recovered;
                 Console.Error.WriteLine($"  {retryLabel}: {recovered}/{results.Length} batch(es) passing, {totalFailing} still failing");
 
-                if (options.AutoRetry && passedTests.Count == 0 && stillTimedOut.Count == 0 && suspectedHangers.Count == 0)
+                if (options.AutoRetry && passedTests.Count == 0)
                 {
                     Console.Error.WriteLine("  Auto-retry: no progress this round — stopping retries");
                     break;
@@ -234,6 +271,7 @@ public static partial class RetryOrchestrator
         return new RetryResult(
             confirmedHangers.ToList(),
             suspectedHangers.ToList(),
+            persistentFailures.ToList(),
             round);
     }
 
