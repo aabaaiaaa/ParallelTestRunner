@@ -88,6 +88,11 @@ var autoOption = new Option<bool>("--auto")
     Description = "Auto-tune batch size and parallelism based on test count and CPU cores"
 };
 
+var autoRetryOption = new Option<bool>("--auto-retry")
+{
+    Description = "Keep retrying failed batches as long as at least one recovers per round (overrides --retries)"
+};
+
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
 {
     projectArg,
@@ -99,6 +104,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     idleTimeoutOption,
     retriesOption,
     autoOption,
+    autoRetryOption,
 };
 
 // Treat unmatched tokens as extra dotnet test args (passed after --)
@@ -126,6 +132,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var idleTimeout = parseResult.GetValue(idleTimeoutOption);
     var retries = parseResult.GetValue(retriesOption);
     var auto = parseResult.GetValue(autoOption);
+    var autoRetry = parseResult.GetValue(autoRetryOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
     // Create a timestamped subfolder for results so runs don't collide
@@ -141,6 +148,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         MaxParallelism: maxParallelism,
         MaxTests: maxTests,
         Retries: retries,
+        AutoRetry: autoRetry,
         ExtraDotnetTestArgs: extraArgs,
         ResultsDirectory: resultsDir,
         IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
@@ -217,50 +225,15 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Step 3: Run batches in parallel
     var results = await TestRunner.RunAllAsync(batches, options, cancellationToken);
 
-    // Step 3.5: If any batches timed out, run hang detection to isolate specific tests
-    HangDetectionResult? hangDetection = null;
-    if (results.Any(r => r.TimedOut))
+    // Step 3.5: Smart retry with integrated hang detection
+    RetryResult? retryResult = null;
+    if ((options.AutoRetry || options.Retries > 0) && results.Any(r => r.ExitCode != 0))
     {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("========== Hang Detection ==========");
-        Console.Error.WriteLine("  Some batches timed out — running binary-split detection to isolate hanging tests...");
-        hangDetection = await HangDetector.DetectAsync(results, batches, options, cancellationToken);
-    }
-
-    // Step 3.75: Retry failed batches
-    if (options.Retries > 0)
-    {
-        for (var retry = 1; retry <= options.Retries; retry++)
-        {
-            var failedIndices = results
-                .Select((r, i) => (Result: r, Index: i))
-                .Where(x => x.Result.ExitCode != 0)
-                .Select(x => x.Index)
-                .ToList();
-
-            if (failedIndices.Count == 0)
-                break;
-
-            Console.Error.WriteLine();
-            Console.Error.WriteLine($"========== Retry {retry}/{options.Retries} ==========");
-            Console.Error.WriteLine($"  Re-running {failedIndices.Count} failed batch(es)...");
-
-            var failedBatches = failedIndices.Select(i => batches[i]).ToList();
-            var retryResults = await TestRunner.RunAllAsync(failedBatches, options, cancellationToken);
-
-            for (var j = 0; j < failedIndices.Count; j++)
-            {
-                var originalIndex = failedIndices[j];
-                results[originalIndex] = retryResults[j] with { BatchIndex = originalIndex };
-            }
-
-            var stillFailed = retryResults.Count(r => r.ExitCode != 0);
-            Console.Error.WriteLine($"  Retry {retry}/{options.Retries}: {retryResults.Length - stillFailed}/{retryResults.Length} batch(es) recovered, {stillFailed} still failing");
-        }
+        retryResult = await RetryOrchestrator.RunAsync(results, batches, options, cancellationToken);
     }
 
     // Step 4: Collate results
-    toolExitCode = ResultCollator.Collate(results, hangDetection);
+    toolExitCode = ResultCollator.Collate(results, retryResult);
 });
 
 var config = new CommandLineConfiguration(rootCommand);
@@ -283,7 +256,9 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine($"  Detected cores: {Environment.ProcessorCount}");
     Console.Error.WriteLine($"  Chosen parallelism: {options.MaxParallelism}");
     Console.Error.WriteLine($"  Idle timeout: {(options.IdleTimeout > TimeSpan.Zero ? $"{options.IdleTimeout.TotalSeconds:F0}s" : "none")}");
-    Console.Error.WriteLine($"  Retries: {options.Retries}");
+    Console.Error.WriteLine(options.AutoRetry
+        ? "  Auto-retry: enabled"
+        : $"  Retries: {options.Retries}");
     if (options.ResultsDirectory is not null)
         Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();

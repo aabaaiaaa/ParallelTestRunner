@@ -84,11 +84,12 @@ public class ResultCollatorTests
             new BatchResult(0, 10, -1, TimedOut: true),
         };
 
-        var hangDetection = new HangDetectionResult(
+        var retryResult = new RetryResult(
             HangingTests: new[] { "HangingTest1", "HangingTest2" },
-            RetriesPerformed: 5);
+            SuspectedHangingTests: Array.Empty<string>(),
+            RetryRoundsPerformed: 5);
 
-        var exitCode = ResultCollator.Collate(results, hangDetection);
+        var exitCode = ResultCollator.Collate(results, retryResult);
 
         Assert.AreEqual(1, exitCode);
     }
@@ -101,11 +102,12 @@ public class ResultCollatorTests
             new BatchResult(0, 10, -1, TimedOut: true),
         };
 
-        var hangDetection = new HangDetectionResult(
+        var retryResult = new RetryResult(
             HangingTests: Array.Empty<string>(),
-            RetriesPerformed: 3);
+            SuspectedHangingTests: Array.Empty<string>(),
+            RetryRoundsPerformed: 3);
 
-        var exitCode = ResultCollator.Collate(results, hangDetection);
+        var exitCode = ResultCollator.Collate(results, retryResult);
 
         // Still fails because the batch timed out (exit code -1 != 0)
         Assert.AreEqual(1, exitCode);

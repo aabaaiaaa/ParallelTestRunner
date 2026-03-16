@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Parallel Test Runner** — a .NET 10 dotnet tool that discovers MSTest tests via `dotnet test --list-tests`, splits them into batches respecting a 7000-character filter string limit, and runs multiple `dotnet test` processes in parallel. Designed for TeamCity CI with real-time `##teamcity` service message forwarding.
+**Parallel Test Runner** — a .NET 10 dotnet tool that discovers MSTest tests via `dotnet vstest --ListFullyQualifiedTests`, splits them into batches respecting a 7000-character filter string limit, and runs multiple `dotnet test` processes in parallel. Designed for TeamCity CI with real-time `##teamcity` service message forwarding.
 
 ## Build & Test
 
@@ -26,34 +26,33 @@ dotnet pack src/ParallelTestRunner
 src/ParallelTestRunner/          # Main tool (console app, packaged as dotnet tool)
   Program.cs                     # CLI entry point using System.CommandLine, orchestrates pipeline
   Options.cs                     # Immutable record for configuration
-  TestDiscovery.cs               # Runs `dotnet test --list-tests --no-build`, parses output
+  TestDiscovery.cs               # Two-step discovery: resolves DLL path, then extracts FQN test names
   TestBatcher.cs                 # Splits tests into batches, respects filter length limit
   AutoTuner.cs                   # Calculates optimal batch size and parallelism for --auto flag
   TestRunner.cs                  # Runs batches in parallel with SemaphoreSlim throttling
-  HangDetector.cs                # Binary-split hang detection for timed-out batches
+  RetryOrchestrator.cs           # Smart retry with integrated hang detection for timed-out batches
   ResultCollator.cs              # Summarises results, determines exit code
 
 tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
-  TestBatcherTests.cs            # 8 unit tests for batching logic
-  TestDiscoveryParseTests.cs     # 8 unit tests for discovery output parsing
+  TestBatcherTests.cs            # 9 unit tests for batching logic
+  TestDiscoveryParseTests.cs     # 6 unit tests for discovery output parsing
   ResultCollatorTests.cs         # 7 unit tests for result collation and exit codes
   AutoTunerTests.cs              # 10 unit tests for auto-tuning logic
-  HangDetectorTests.cs           # 6 unit tests for binary-split hang detection
-  IntegrationTests.cs            # 13 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries)
+  RetryOrchestratorTests.cs      # 10 unit tests for smart retry orchestration and hang detection
+  IntegrationTests.cs            # 15 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries, auto-retry)
 
-tests/DummyTestProject/          # Fixture project with 66 unique test methods across 6 namespaces
+tests/DummyTestProject/          # Fixture project with 66 unique FQN test methods across 6 namespaces
   DummyTests.cs                  # Includes parameterised, slow, conditionally-failing, transient-failing, concurrency-detecting, and long-named tests
 ```
 
 ## Architecture
 
-The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Hang detection (if timeouts) → Retries (if failures) → Result collation**.
+The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Smart retry orchestration → Result collation**.
 
-- **Discovery**: Spawns `dotnet test --list-tests --no-build`, parses output after the sentinel line `"The following Tests are available:"`. Deduplicates parameterised tests using source-generated regex to strip `(...)` suffixes.
-- **Batching**: Chunks tests by batch size, then auto-splits any chunk whose `FullyQualifiedName~...|FullyQualifiedName~...` filter string exceeds `MaxFilterLength` (7000 chars).
+- **Discovery**: Two-step process: first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path from the `"Test run for <path>.dll"` output line, then runs `dotnet vstest <dll> --ListFullyQualifiedTests` to extract fully-qualified test names into a temp file. FQNs naturally deduplicate parameterised test variants (the FQN is the base method name, and `FullyQualifiedName=` matches all variants).
+- **Batching**: Chunks tests by batch size, then auto-splits any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds `MaxFilterLength` (7000 chars).
 - **Execution**: `SemaphoreSlim(maxParallelism)` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially (`-- MSTest.Parallelize.Workers=1`) — parallelism is achieved by running multiple isolated processes, not by in-process test parallelisation. Each process runs with `-v normal` verbosity to ensure per-test output keeps the idle timeout alive. Each process uses event-based async output (OutputDataReceived/ErrorDataReceived) with lock-protected console writes to prevent interleaving. Process lifecycle is wrapped in `TaskCompletionSource` for async-friendly waiting.
-- **Hang Detection**: After execution, any timed-out batches are fed into `HangDetector` which recursively binary-splits test lists and re-runs them to isolate specific hanging tests. Max recursion depth of 10. Accepts a `Func<>` for the batch runner to enable unit testing with fakes.
-- **Retries**: After hang detection, all failed batches (exit code != 0, including timed-out) are retried up to `Retries` times. Each retry round re-runs failures through `RunAllAsync` with the same parallelism. Results are replaced in-place. Early exit if all failures recover.
+- **Retry Orchestration**: `RetryOrchestrator` handles both retries and hang detection in a single phase. When a batch times out, its output is parsed to identify completed tests (passed/failed) and the suspected hanging test (first test with no result line). Suspected hangers are set aside; remaining unrun/failed tests retry immediately at full parallelism. After failure retries complete, suspected hangers are tested solo — if they time out again, they're confirmed as hanging and permanently excluded. Only failed batches are retried — passing batches are never re-run, thanks to `FullyQualifiedName=` exact matching which prevents unintended test matching. With `--auto-retry`, retries continue as long as at least one batch recovers per round.
 - **Cancellation**: `CancellationTokenSource` propagates Ctrl+C through all layers, killing spawned process trees gracefully.
 - **TeamCity**: Auto-detected via `TEAMCITY_VERSION` env var — appends `/TestAdapterPath:. /Logger:teamcity` when present.
 
@@ -64,11 +63,10 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 | `MaxFilterLength` | 7000 | TestBatcher.cs |
 | Default batch size | 50 | Options.cs |
 | Default max parallelism | `ProcessorCount / 2` (min 1) | Options.cs |
-| Discovery sentinel | `"The following Tests are available:"` | TestDiscovery.cs |
-| Filter format | `Name~Test1\|Name~Test2` | TestBatcher.cs |
+| Discovery DLL path pattern | `"Test run for <path>.dll"` | TestDiscovery.cs |
+| Filter format | `FullyQualifiedName=Ns.Cls.Test1\|FullyQualifiedName=Ns.Cls.Test2` | TestBatcher.cs |
 | Default idle timeout | 60s | Program.cs |
 | Default retries | 2 | Options.cs |
-| Hang detection max depth | 10 | HangDetector.cs |
 
 ## Exit Codes
 

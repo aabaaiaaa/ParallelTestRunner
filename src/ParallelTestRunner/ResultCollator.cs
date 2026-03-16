@@ -6,7 +6,7 @@ public static class ResultCollator
     /// Prints a summary of batch results to stderr and returns the process exit code.
     /// Returns 0 if all batches passed, 1 if any failed.
     /// </summary>
-    public static int Collate(BatchResult[] results, HangDetectionResult? hangDetection = null)
+    public static int Collate(BatchResult[] results, RetryResult? retryResult = null)
     {
         var totalTests = results.Sum(r => r.TestCount);
         var failedBatches = results.Where(r => r.ExitCode != 0).ToArray();
@@ -41,21 +41,34 @@ public static class ResultCollator
             }
         }
 
-        if (hangDetection is { HangingTests.Count: > 0 })
+        if (retryResult is { HangingTests.Count: > 0 })
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine("========== Hanging Test Detection ==========");
-            Console.Error.WriteLine($"  Retries performed: {hangDetection.RetriesPerformed}");
-            Console.Error.WriteLine($"  Hanging tests identified: {hangDetection.HangingTests.Count}");
-            foreach (var test in hangDetection.HangingTests)
+            Console.Error.WriteLine("========== Hanging Tests ==========");
+            Console.Error.WriteLine($"  Retry rounds performed: {retryResult.RetryRoundsPerformed}");
+            Console.Error.WriteLine($"  Confirmed hanging tests: {retryResult.HangingTests.Count}");
+            foreach (var test in retryResult.HangingTests)
             {
                 Console.Error.WriteLine($"    - {test}");
             }
         }
-        else if (hangDetection is not null)
+
+        if (retryResult is { SuspectedHangingTests.Count: > 0 })
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine("  Hang detection ran but no hanging tests were confirmed (may be intermittent).");
+            Console.Error.WriteLine("========== Suspected Hanging Tests (untested) ==========");
+            Console.Error.WriteLine($"  These tests were suspected but retry cap was reached before solo testing:");
+            foreach (var test in retryResult.SuspectedHangingTests)
+            {
+                Console.Error.WriteLine($"    - {test}");
+            }
+        }
+
+        if (retryResult is not null && retryResult.HangingTests.Count == 0 && retryResult.SuspectedHangingTests.Count == 0
+            && retryResult.RetryRoundsPerformed > 0)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no hanging tests detected.");
         }
 
         if (failedBatches.Length > 0)

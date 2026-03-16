@@ -3,12 +3,11 @@ namespace ParallelTestRunner;
 public static class TestBatcher
 {
     private const int MaxFilterLength = 7000;
-    // Use Name~ (contains) rather than FullyQualifiedName~ because --list-tests returns
-    // display names. For BDD frameworks (Reqnroll, SpecFlow) these are scenario titles
-    // which don't match FullyQualifiedName. Contains-match is needed because parameterised
-    // test names are deduplicated during discovery (their (...) suffix is stripped, since
-    // the VSTest filter parser cannot handle parentheses/commas in filter values).
-    private const string FilterPrefix = "Name~";
+    // Use FullyQualifiedName= (exact match) for filtering. Discovery provides FQNs via
+    // dotnet vstest --ListFullyQualifiedTests, so names are clean (no parens/commas).
+    // Parameterised tests are naturally grouped — the FQN is the base method name and
+    // FullyQualifiedName= matches all variants.
+    private const string FilterPrefix = "FullyQualifiedName=";
     private const string FilterSeparator = "|";
 
     /// <summary>
@@ -46,9 +45,7 @@ public static class TestBatcher
 
     /// <summary>
     /// Builds the <c>--filter</c> string for a batch of test names.
-    /// Format: <c>Name~Test1|Name~Test2|...</c>
-    /// Uses contains-match (<c>~</c>) so that parameterised test variants (whose
-    /// <c>(...)</c> suffix was stripped during discovery) are still matched.
+    /// Format: <c>FullyQualifiedName=Ns.Class.Test1|FullyQualifiedName=Ns.Class.Test2|...</c>
     /// </summary>
     internal static string BuildFilterString(IReadOnlyList<string> testNames)
     {

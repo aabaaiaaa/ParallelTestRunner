@@ -6,6 +6,7 @@ public record Options(
     int MaxParallelism = 0,
     int MaxTests = 0,
     int Retries = 2,
+    bool AutoRetry = false,
     string[] ExtraDotnetTestArgs = default!,
     string? ResultsDirectory = null,
     TimeSpan IdleTimeout = default)

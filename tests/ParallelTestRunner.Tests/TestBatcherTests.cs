@@ -120,6 +120,6 @@ public class TestBatcherTests
 
         var filter = TestBatcher.BuildFilterString(tests);
 
-        Assert.AreEqual("Name~Ns.Class.TestA|Name~Ns.Class.TestB", filter);
+        Assert.AreEqual("FullyQualifiedName=Ns.Class.TestA|FullyQualifiedName=Ns.Class.TestB", filter);
     }
 }

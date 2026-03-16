@@ -58,19 +58,18 @@ public class IntegrationTests
     [Timeout(120000)]
     public void IdleTimeout_DetectsAndIsolatesHangingTest()
     {
-        // Single test covering idle timeout detection + binary-split isolation.
+        // Single test covering idle timeout detection + retry-based hang isolation.
         // Uses 3s idle timeout — passing tests produce output within ~2s of startup.
+        // Retries enabled so the orchestrator can extract suspected hangers and test them solo.
         var result = RunTool(
-            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 8 --idle-timeout 3 --retries 0",
+            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 8 --idle-timeout 3 --retries 2",
             environmentOverrides: new Dictionary<string, string> { ["HANG_TEST"] = "1" });
 
         Assert.AreEqual(1, result.ExitCode, $"Expected exit code 1 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
         // Idle timeout fires
         StringAssert.Contains(result.Stderr, "IDLE TIMEOUT");
-        StringAssert.Contains(result.Stderr, "Timed out batches: 1");
-        StringAssert.Contains(result.Stderr, "Last output from batch");
-        // Binary-split isolates the specific hanging test
-        StringAssert.Contains(result.Stderr, "Hang Detection");
+        // Retry orchestrator identifies the hanging test
+        StringAssert.Contains(result.Stderr, "Suspected hanging test");
         StringAssert.Contains(result.Stderr, "HangingTest_ConditionalBlock");
     }
 
@@ -87,15 +86,14 @@ public class IntegrationTests
     }
 
     [TestMethod]
-    public void LongFilterString_40LongNamesInOneBatch()
+    public void LongFilterString_AutoSplitsWhenExceedingLimit()
     {
-        // 40 tests with ~95-char names in a single batch = ~4000 char filter string
-        // Tests whether VSTest can handle a large Name~...|Name~...|... filter
+        // 66 tests with FQN prefix exceeds 7000-char filter limit, auto-splits into 2 batches
         var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 8 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Discovered 66 tests");
-        StringAssert.Contains(result.Stderr, "Created 1 batches");
+        StringAssert.Contains(result.Stderr, "Created 2 batches");
     }
 
     [TestMethod]
@@ -172,6 +170,41 @@ public class IntegrationTests
         Assert.AreEqual(1, result.ExitCode, $"Expected exit code 1 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Retry 1/2");
         StringAssert.Contains(result.Stderr, "Retry 2/2");
+    }
+
+    [TestMethod]
+    public void AutoRetry_KeepsRetryingWhileMakingProgress()
+    {
+        // Clean up marker file in case a previous run left it behind
+        var markerPath = Path.Combine(Path.GetTempPath(), "parallel_test_runner_fail_once.marker");
+        if (File.Exists(markerPath))
+            File.Delete(markerPath);
+
+        var result = RunTool(
+            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 8 --auto-retry --retries 0 --idle-timeout 10",
+            environmentOverrides: new Dictionary<string, string> { ["FAIL_ONCE"] = "1" });
+
+        Assert.AreEqual(0, result.ExitCode, $"Expected exit code 0 (auto-retry should recover) but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        // Proves auto-retry overrides --retries 0
+        StringAssert.Contains(result.Stderr, "Retry 1:");
+        StringAssert.Contains(result.Stderr, "Auto-retry: enabled");
+    }
+
+    [TestMethod]
+    public void AutoRetry_OnlyRetriesFailedBatches_NotPassingTests()
+    {
+        // With batch-size 5, the 3 FailableTests end up in the last batch (tests 64-66).
+        // The other 12 batches pass. Auto-retry should only re-run the failed batch's tests,
+        // not all 66 tests, and stop after 1 round of no progress.
+        var result = RunTool(
+            $"\"{_dummyProjectPath}\" --batch-size 5 --max-parallelism 8 --auto-retry --idle-timeout 10",
+            environmentOverrides: new Dictionary<string, string> { ["FAIL_TESTS"] = "1" });
+
+        Assert.AreEqual(1, result.ExitCode, $"Expected exit code 1 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        // Auto-retry should stop after detecting no progress — proves it doesn't loop
+        StringAssert.Contains(result.Stderr, "Auto-retry: no progress this round");
+        // Only the failed batch's tests should be retried, not all 66
+        StringAssert.Contains(result.Stderr, "Re-running 6 test(s)");
     }
 
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
