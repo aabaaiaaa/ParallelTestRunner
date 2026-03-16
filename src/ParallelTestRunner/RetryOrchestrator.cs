@@ -38,6 +38,7 @@ public static partial class RetryOrchestrator
     {
         var confirmedHangers = new HashSet<string>();
         var suspectedHangers = new HashSet<string>();
+        var resolvedTests = new HashSet<string>(); // Tests that passed solo — never retry again
         var round = 0;
 
         while (true)
@@ -70,7 +71,9 @@ public static partial class RetryOrchestrator
                 var (completedPassed, completedFailed, suspectedHanger) =
                     ParseTimedOutOutput(results[idx].CapturedOutput, batchTests);
 
-                if (suspectedHanger is not null && !confirmedHangers.Contains(suspectedHanger))
+                if (suspectedHanger is not null &&
+                    !confirmedHangers.Contains(suspectedHanger) &&
+                    !resolvedTests.Contains(suspectedHanger))
                 {
                     suspectedHangers.Add(suspectedHanger);
                     Console.Error.WriteLine($"  Suspected hanging test: {suspectedHanger}");
@@ -100,9 +103,9 @@ public static partial class RetryOrchestrator
                 retryPool.AddRange(originalBatches[results[idx].BatchIndex]);
             }
 
-            // Remove known/suspected hangers from retry pool
+            // Remove known/suspected hangers and resolved tests from retry pool
             retryPool = retryPool
-                .Where(t => !confirmedHangers.Contains(t) && !suspectedHangers.Contains(t))
+                .Where(t => !confirmedHangers.Contains(t) && !suspectedHangers.Contains(t) && !resolvedTests.Contains(t))
                 .Distinct()
                 .ToList();
 
@@ -164,6 +167,7 @@ public static partial class RetryOrchestrator
                     var batchTests = originalBatches[results[i].BatchIndex];
                     var allPassed = batchTests.All(t =>
                         passedTests.Contains(t) ||
+                        resolvedTests.Contains(t) ||
                         confirmedHangers.Contains(t) ||
                         suspectedHangers.Contains(t));
 
@@ -209,25 +213,8 @@ public static partial class RetryOrchestrator
                     else if (hangerResults[j].ExitCode == 0)
                     {
                         suspectedHangers.Remove(test);
+                        resolvedTests.Add(test);
                         Console.Error.WriteLine($"    Test passed on retry: {test}");
-
-                        // Update any original batch that contained this test
-                        for (var i = 0; i < results.Length; i++)
-                        {
-                            if (results[i].ExitCode != 0)
-                            {
-                                var batchTests = originalBatches[results[i].BatchIndex];
-                                if (batchTests.Contains(test))
-                                {
-                                    var allResolved = batchTests.All(t =>
-                                        t == test ||
-                                        confirmedHangers.Contains(t) ||
-                                        suspectedHangers.Contains(t) ||
-                                        results[i].ExitCode == 0);
-                                    // Don't mark resolved here — let next round handle it
-                                }
-                            }
-                        }
                     }
                     // If failed (not timed out), stays in suspected for next round retry
                 }

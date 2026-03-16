@@ -54,10 +54,10 @@ dotnet run --project src/ParallelTestRunner -- <path-to-test-project>
 parallel-test-runner MyTests.csproj --batch-size 10 --max-parallelism 4
 
 # Auto-tune batch size and parallelism based on test count and CPU cores
-parallel-test-runner MyTests.csproj --auto
+parallel-test-runner MyTests.csproj --auto-tune
 
 # Auto-tune with explicit override (shows recommendation but keeps your value)
-parallel-test-runner MyTests.csproj --auto --max-parallelism 4
+parallel-test-runner MyTests.csproj --auto-tune --max-parallelism 4
 
 # Run a subset of tests
 parallel-test-runner MyTests.csproj --skip-tests 100 --max-tests 50
@@ -81,8 +81,8 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 
 - **Discovery**: Two-step process — first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path, then runs `dotnet vstest --ListFullyQualifiedTests` to extract fully-qualified test names. Using FQNs ensures exact matching during filtering and naturally deduplicates parameterised test variants.
 - **Batching**: Splits tests into chunks by batch size. Any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds 7000 characters is automatically sub-split.
-- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially (`MSTest.Parallelize.Workers=1`) — parallelism comes from running multiple isolated processes, not in-process test parallelisation.
-- **Smart retry orchestration**: When a batch times out (no output for `--idle-timeout` seconds), its output is parsed to identify which tests completed and which test was likely hanging. The suspected hanger is set aside; remaining unrun and failed tests are retried immediately at full parallelism. After retries, suspected hangers are tested individually — if they time out again solo, they're confirmed as hanging and permanently excluded. Only failed batches are retried — passing batches are never re-run, thanks to `FullyQualifiedName=` exact matching. With `--auto-retry`, retries continue as long as at least one batch recovers per round — useful for flaky tests caused by external factors.
+- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially (`MSTest.Parallelize.Workers=1`) — parallelism comes from running multiple isolated processes, not in-process test parallelisation. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
+- **Smart retry orchestration**: When a batch times out (no output for `--idle-timeout` seconds), its output is parsed to identify which tests completed and which test was likely hanging. The suspected hanger is set aside; remaining unrun and failed tests are retried immediately at full parallelism. After retries, suspected hangers are tested individually — if they time out again solo, they're confirmed as hanging and permanently excluded. Tests that pass solo are marked as resolved and never retried again. Only failed batches are retried — passing batches are never re-run, thanks to `FullyQualifiedName=` exact matching. With `--auto-retry`, retries continue as long as at least one batch recovers per round — useful for flaky tests caused by external factors.
 - **Cancellation**: Ctrl+C propagates through all layers, stopping spawned process trees gracefully.
 
 ## TeamCity Build Step Configuration
@@ -114,7 +114,7 @@ dotnet tool restore
 **Step 3 — Run tests**
 
 ```bash
-parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
+parallel-test-runner MyTests.csproj --auto-tune --max-parallelism 4
 ```
 
 ### Complete sample build step script
@@ -122,7 +122,7 @@ parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
 ```bash
 dotnet build MySolution.sln --configuration Release
 dotnet tool install --global ParallelTestRunner --add-source ./nupkg
-parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 ```
 
 ## Configuration Reference
@@ -134,7 +134,7 @@ parallel-test-runner MyTests.csproj --batch-size 50 --max-parallelism 4
 | `--max-parallelism` | int | `CPU cores / 2` | Maximum concurrent `dotnet test` processes (minimum 1) |
 | `--max-tests` | int | `0` | Maximum number of tests to run (0 = all) |
 | `--skip-tests` | int | `0` | Number of tests to skip from the start of the discovered list |
-| `--auto` | bool | `false` | Auto-tune batch size and parallelism based on test count and CPU cores |
+| `--auto-tune` | bool | `false` | Auto-tune batch size and parallelism based on test count and CPU cores |
 | `--idle-timeout` | int | `60` | Kill a batch if no output is received for this many seconds (0 = no timeout) |
 | `--retries` | int | `2` | Number of times to retry failed batches (0 = no retries) |
 | `--auto-retry` | bool | `false` | Keep retrying failed batches as long as at least one recovers per round (overrides `--retries`) |

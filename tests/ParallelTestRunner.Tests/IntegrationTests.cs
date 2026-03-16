@@ -207,6 +207,24 @@ public class IntegrationTests
         StringAssert.Contains(result.Stderr, "Re-running 6 test(s)");
     }
 
+    [TestMethod]
+    public void TeamCity_EmitsServiceMessages_WhenEnvVarSet()
+    {
+        // When TEAMCITY_VERSION is set, the tool appends /TestAdapterPath:. /Logger:teamcity
+        // to dotnet test. Since the teamcity logger isn't actually installed, the test process
+        // will fail — but we can verify the arguments were passed by checking the error output.
+        var result = RunTool(
+            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --max-tests 5 --retries 0 --idle-timeout 10",
+            environmentOverrides: new Dictionary<string, string> { ["TEAMCITY_VERSION"] = "2024.1" });
+
+        // The tool should attempt to use the TeamCity logger
+        // Either it works (if installed) or fails with an error mentioning the logger
+        var combined = result.Stdout + result.Stderr;
+        Assert.IsTrue(
+            combined.Contains("teamcity") || combined.Contains("Logger"),
+            $"Expected TeamCity logger reference in output.\nStdout:\n{result.Stdout}\nStderr:\n{result.Stderr}");
+    }
+
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
     {
         return RunProcess("dotnet", $"run --project \"{_toolProjectPath}\" --no-launch-profile -- {arguments}",

@@ -1,12 +1,17 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace ParallelTestRunner;
 
 public record BatchResult(int BatchIndex, int TestCount, int ExitCode, bool TimedOut = false, IReadOnlyList<string>? CapturedOutput = null);
 
-public static class TestRunner
+public static partial class TestRunner
 {
     private static readonly object ConsoleLock = new();
+
+    // Matches "  Passed TestName [Xs]" or "  Failed TestName [Xs]" from VSTest normal verbosity
+    [GeneratedRegex(@"^\s+(Passed|Failed)\s+.+\s+\[")]
+    private static partial Regex TestResultLineRegex();
 
     /// <summary>
     /// Runs all test batches in parallel, throttled by <paramref name="options"/>.MaxParallelism.
@@ -20,8 +25,11 @@ public static class TestRunner
         var trackedProcesses = new List<Process>();
         var processLock = new object();
 
+        var totalTests = batches.Sum(b => b.Count);
+        var progress = new ProgressTracker(batches.Count, totalTests);
+
         var tasks = batches.Select((batch, index) =>
-            RunBatchAsync(batch, index, options, semaphore, trackedProcesses, processLock, ct));
+            RunBatchAsync(batch, index, options, semaphore, trackedProcesses, processLock, progress, ct));
 
         try
         {
@@ -51,7 +59,7 @@ public static class TestRunner
     }
 
     /// <summary>
-    /// Runs a single batch without semaphore management. Used by HangDetector for diagnostic re-runs.
+    /// Runs a single batch without semaphore management. Used by RetryOrchestrator for diagnostic re-runs.
     /// </summary>
     internal static async Task<BatchResult> RunSingleBatchAsync(
         IReadOnlyList<string> batch,
@@ -62,7 +70,7 @@ public static class TestRunner
         using var semaphore = new SemaphoreSlim(1);
         var trackedProcesses = new List<Process>();
         var processLock = new object();
-        return await RunBatchAsync(batch, batchIndex, options, semaphore, trackedProcesses, processLock, ct);
+        return await RunBatchAsync(batch, batchIndex, options, semaphore, trackedProcesses, processLock, null, ct);
     }
 
     private static async Task<BatchResult> RunBatchAsync(
@@ -72,6 +80,7 @@ public static class TestRunner
         SemaphoreSlim semaphore,
         List<Process> trackedProcesses,
         object processLock,
+        ProgressTracker? progress,
         CancellationToken ct)
     {
         await semaphore.WaitAsync(ct);
@@ -118,6 +127,19 @@ public static class TestRunner
                     lock (outputLock)
                     {
                         outputLines.Add(e.Data);
+                    }
+
+                    // Track individual test pass/fail for progress reporting
+                    if (progress is not null)
+                    {
+                        var match = TestResultLineRegex().Match(e.Data);
+                        if (match.Success)
+                        {
+                            if (match.Groups[1].Value == "Passed")
+                                progress.IncrementPassed();
+                            else
+                                progress.IncrementFailed();
+                        }
                     }
 
                     lock (ConsoleLock)
@@ -206,7 +228,9 @@ public static class TestRunner
                             Console.Error.WriteLine($"  *** Batch {batchIndex} IDLE TIMEOUT — no output for {elapsed.TotalSeconds:F0}s ***");
                         }
 
-                        return new BatchResult(batchIndex, batch.Count, -1, TimedOut: true, CapturedOutput: snapshot);
+                        var timedOutResult = new BatchResult(batchIndex, batch.Count, -1, TimedOut: true, CapturedOutput: snapshot);
+                        progress?.BatchCompleted(timedOutResult);
+                        return timedOutResult;
                     }
                 }
             }
@@ -214,7 +238,9 @@ public static class TestRunner
             var exitCode = await tcs.Task;
             ct.ThrowIfCancellationRequested();
 
-            return new BatchResult(batchIndex, batch.Count, exitCode);
+            var result = new BatchResult(batchIndex, batch.Count, exitCode);
+            progress?.BatchCompleted(result);
+            return result;
         }
         finally
         {
@@ -269,5 +295,45 @@ public static class TestRunner
         return value.Contains(' ') || value.Contains('"') || value.Contains('|')
             ? $"\"{value.Replace("\"", "\\\"")}\""
             : value;
+    }
+}
+
+/// <summary>
+/// Thread-safe progress tracker that counts individual test passes/failures
+/// from VSTest output and reports after each batch completes.
+/// </summary>
+internal sealed class ProgressTracker
+{
+    private readonly int _totalBatches;
+    private readonly int _totalTests;
+    private int _completedBatches;
+    private int _passedTests;
+    private int _failedTests;
+
+    public ProgressTracker(int totalBatches, int totalTests)
+    {
+        _totalBatches = totalBatches;
+        _totalTests = totalTests;
+    }
+
+    public void IncrementPassed() => Interlocked.Increment(ref _passedTests);
+    public void IncrementFailed() => Interlocked.Increment(ref _failedTests);
+
+    public void BatchCompleted(BatchResult result)
+    {
+        var completed = Interlocked.Increment(ref _completedBatches);
+        var passed = Volatile.Read(ref _passedTests);
+        var failed = Volatile.Read(ref _failedTests);
+        var tested = passed + failed;
+        var batchesRemaining = _totalBatches - completed;
+
+        var prefix = result.TimedOut
+            ? $"  TIMED OUT [{completed}/{_totalBatches} batches] "
+            : $"  [{completed}/{_totalBatches} batches] ";
+
+        Console.Error.WriteLine(
+            prefix +
+            $"{passed} passed | {failed} failed | {tested} executed" +
+            (batchesRemaining > 0 ? $" | {batchesRemaining} batches remaining" : ""));
     }
 }

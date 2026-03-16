@@ -39,6 +39,9 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# Test results
+test-results/
+
 # Misc
 *.bak
 *.tmp

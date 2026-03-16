@@ -83,7 +83,7 @@ retriesOption.Validators.Add(result =>
         result.AddError("--retries must be 0 or greater.");
 });
 
-var autoOption = new Option<bool>("--auto")
+var autoTuneOption = new Option<bool>("--auto-tune")
 {
     Description = "Auto-tune batch size and parallelism based on test count and CPU cores"
 };
@@ -103,7 +103,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     resultsDirOption,
     idleTimeoutOption,
     retriesOption,
-    autoOption,
+    autoTuneOption,
     autoRetryOption,
 };
 
@@ -131,7 +131,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var resultsDir = parseResult.GetValue(resultsDirOption);
     var idleTimeout = parseResult.GetValue(idleTimeoutOption);
     var retries = parseResult.GetValue(retriesOption);
-    var auto = parseResult.GetValue(autoOption);
+    var autoTune = parseResult.GetValue(autoTuneOption);
     var autoRetry = parseResult.GetValue(autoRetryOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
@@ -191,8 +191,8 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         return;
     }
 
-    // Auto-tune batch size and parallelism if --auto is specified
-    if (auto && tests.Count > 0)
+    // Auto-tune batch size and parallelism if --auto-tune is specified
+    if (autoTune && tests.Count > 0)
     {
         var avgNameLength = tests.Average(t => (double)t.Length);
         var (autoBatchSize, autoParallelism) = AutoTuner.Calculate(
