@@ -266,6 +266,12 @@ public static partial class RetryOrchestrator
 
             if (!options.AutoRetry && round >= options.Retries)
                 break;
+
+            if (options.AutoRetry && round >= 10)
+            {
+                Console.Error.WriteLine("  Auto-retry: max rounds (10) reached — stopping retries");
+                break;
+            }
         }
 
         return new RetryResult(
