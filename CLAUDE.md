@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Parallel Test Runner** — a .NET 10 dotnet tool that discovers MSTest tests via `dotnet vstest --ListFullyQualifiedTests`, splits them into batches respecting a 7000-character filter string limit, and runs multiple `dotnet test` processes in parallel. Designed for TeamCity CI with real-time `##teamcity` service message forwarding.
+**Parallel Test Runner** — a .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel, while forcing tests within each process to run sequentially. This solves shared resource contention (databases, files, static state) that causes failures with in-process parallel execution. Discovers tests via `dotnet vstest --ListFullyQualifiedTests`, batches them respecting a 7000-character filter string limit, and supports MSTest, xUnit, and NUnit. Designed for CI pipelines with smart retry orchestration, hang detection, and TeamCity `##teamcity` service message forwarding.
 
 ## Build & Test
 

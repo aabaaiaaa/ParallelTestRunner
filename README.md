@@ -1,6 +1,10 @@
 # Parallel Test Runner
 
-A .NET 10 dotnet tool that discovers MSTest tests, splits them into configurable batches, and runs multiple `dotnet test` processes in parallel. Designed for TeamCity CI, where `##teamcity` service messages are forwarded in real-time.
+A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel — while forcing tests within each process to run sequentially.
+
+This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each test gets its own clean environment with no shared state, while still achieving parallelism at the process level. Supports MSTest, xUnit, and NUnit.
+
+Designed for CI pipelines with built-in smart retry orchestration, hang detection, and TeamCity `##teamcity` service message forwarding.
 
 ## Installation
 

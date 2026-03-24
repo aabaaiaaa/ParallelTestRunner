@@ -8,6 +8,8 @@ public class IntegrationTests
 {
     private static string _solutionRoot = null!;
     private static string _dummyProjectPath = null!;
+    private static string _dummyXUnitProjectPath = null!;
+    private static string _dummyNUnitProjectPath = null!;
     private static string _toolProjectPath = null!;
 
     [ClassInitialize]
@@ -15,14 +17,24 @@ public class IntegrationTests
     {
         _solutionRoot = FindSolutionRoot();
         _dummyProjectPath = Path.Combine(_solutionRoot, "tests", "DummyTestProject", "DummyTestProject.csproj");
+        _dummyXUnitProjectPath = Path.Combine(_solutionRoot, "tests", "DummyTestProject.XUnit", "DummyTestProject.XUnit.csproj");
+        _dummyNUnitProjectPath = Path.Combine(_solutionRoot, "tests", "DummyTestProject.NUnit", "DummyTestProject.NUnit.csproj");
         _toolProjectPath = Path.Combine(_solutionRoot, "src", "ParallelTestRunner", "ParallelTestRunner.csproj");
 
         Assert.IsTrue(File.Exists(_dummyProjectPath), $"DummyTestProject not found at {_dummyProjectPath}");
+        Assert.IsTrue(File.Exists(_dummyXUnitProjectPath), $"DummyTestProject.XUnit not found at {_dummyXUnitProjectPath}");
+        Assert.IsTrue(File.Exists(_dummyNUnitProjectPath), $"DummyTestProject.NUnit not found at {_dummyNUnitProjectPath}");
         Assert.IsTrue(File.Exists(_toolProjectPath), $"Tool project not found at {_toolProjectPath}");
 
-        // Build DummyTestProject since the tool always passes --no-build
+        // Build all dummy projects since the tool always passes --no-build
         var buildResult = RunProcess("dotnet", $"build \"{_dummyProjectPath}\" -c Debug --nologo -v q");
         Assert.AreEqual(0, buildResult.ExitCode, $"Failed to build DummyTestProject:\n{buildResult.Stderr}");
+
+        var xunitBuild = RunProcess("dotnet", $"build \"{_dummyXUnitProjectPath}\" -c Debug --nologo -v q");
+        Assert.AreEqual(0, xunitBuild.ExitCode, $"Failed to build DummyTestProject.XUnit:\n{xunitBuild.Stderr}");
+
+        var nunitBuild = RunProcess("dotnet", $"build \"{_dummyNUnitProjectPath}\" -c Debug --nologo -v q");
+        Assert.AreEqual(0, nunitBuild.ExitCode, $"Failed to build DummyTestProject.NUnit:\n{nunitBuild.Stderr}");
     }
 
     [TestMethod]
@@ -281,6 +293,30 @@ public class IntegrationTests
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         // 70 tests total (66 original + 4 display name tests)
         StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+    }
+
+    [TestMethod]
+    public void XUnit_SequentialExecution_ForcesWorkersToOne()
+    {
+        // xUnit runs test collections in parallel by default. The tool should force
+        // sequential execution via xUnit.MaxParallelThreads=1.
+        // Must use --max-parallelism 1 so all sequential tests run in the same batch/process.
+        var result = RunTool($"\"{_dummyXUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --idle-timeout 10 --retries 0");
+
+        Assert.AreEqual(0, result.ExitCode,
+            $"Expected exit code 0 — xUnit SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void NUnit_SequentialExecution_ForcesWorkersToOne()
+    {
+        // NUnit has [assembly: Parallelizable(ParallelScope.All)] enabling parallel execution.
+        // The tool should force sequential execution via NUnit.NumberOfTestWorkers=1.
+        // Must use --max-parallelism 1 so all sequential tests run in the same batch/process.
+        var result = RunTool($"\"{_dummyNUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --idle-timeout 10 --retries 0");
+
+        Assert.AreEqual(0, result.ExitCode,
+            $"Expected exit code 0 — NUnit SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");
     }
 
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)

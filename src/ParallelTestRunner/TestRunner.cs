@@ -328,9 +328,12 @@ public static class TestRunner
         }
 
         // Force sequential execution within each batch — parallelism is managed
-        // at the process level by this tool, not within dotnet test
+        // at the process level by this tool, not within dotnet test.
+        // Each framework ignores settings it doesn't recognise, so all three are safe to include.
         args.Add("--");
         args.Add("MSTest.Parallelize.Workers=1");
+        args.Add("xUnit.MaxParallelThreads=1");
+        args.Add("NUnit.NumberOfTestWorkers=1");
 
         return string.Join(" ", args);
     }
