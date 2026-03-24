@@ -57,7 +57,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `TestDiscovery.cs:108` — `dotnet vstest` is deprecated by Microsoft in favour of `dotnet test`, but as of .NET 10 it remains the only way to discover fully-qualified test names (`dotnet test --list-tests` only returns display names). Add an XML doc comment on `DiscoverFqnTestsAsync` explaining this is a known deprecation and should be migrated if a future `dotnet test` version adds FQN discovery. No new tests needed.
 
 ### TASK-010: Verify all tests pass
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-001, TASK-002, TASK-003, TASK-004, TASK-005, TASK-006, TASK-007, TASK-008, TASK-009
 - **Description**: Build the solution (`dotnet build ParallelTestRunner.sln`) and run the full test suite (`dotnet test tests/ParallelTestRunner.Tests`). All existing and newly-added tests must pass. Fix any regressions introduced by earlier tasks before marking complete.
