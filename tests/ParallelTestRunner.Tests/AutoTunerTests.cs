@@ -71,13 +71,26 @@ public class AutoTunerTests
     [TestMethod]
     public void Calculate_LargeTestNames_CapsFilterLength()
     {
-        // With avg name length 500, per-test overhead = 5 + 500 + 1 = 506
-        // Max safe batch size = floor(7000 / 506) = 13
+        // With avg name length 500, per-test overhead = 19 + 500 + 1 = 520
+        // Max safe batch size = floor(7000 / 520) = 13
         var (batchSize, parallelism) = AutoTuner.Calculate(1000, 16, 500.0);
 
         Assert.IsTrue(batchSize <= 13, $"Batch size {batchSize} should be capped to fit filter limit");
         Assert.IsTrue(batchSize >= 1);
         Assert.IsTrue(parallelism >= 1);
+    }
+
+    [TestMethod]
+    public void Calculate_FilterCap_RespectsFullyQualifiedNamePrefixLength()
+    {
+        // "FullyQualifiedName=" is 19 chars, separator "|" is 1 char
+        // With avg name length 331, per-test = 19 + 331 + 1 = 351
+        // Max batch = floor(7000 / 351) = 19
+        // If prefix were only 5 ("Name~"), per-test = 337, max batch = 20 — different result
+        var (batchSize, _) = AutoTuner.Calculate(1000, 16, 331.0);
+
+        Assert.AreEqual(19, batchSize,
+            "Batch size must account for 19-char 'FullyQualifiedName=' prefix, not shorter prefix");
     }
 
     [TestMethod]

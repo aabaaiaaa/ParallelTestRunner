@@ -3,7 +3,7 @@ namespace ParallelTestRunner;
 public static class AutoTuner
 {
     private const int MaxFilterLength = 7000;
-    private const int FilterPrefixLength = 5; // "Name~"
+    private const int FilterPrefixLength = 19; // "FullyQualifiedName="
     private const int FilterSeparatorLength = 1; // "|"
 
     /// <summary>
@@ -26,7 +26,7 @@ public static class AutoTuner
         var batchSize = Math.Max(1, (int)Math.Ceiling((double)testCount / targetBatches));
 
         // Step 4: filter limit guard
-        // Each entry in filter: "Name~" + name + "|" (separator)
+        // Each entry in filter: "FullyQualifiedName=" + name + "|" (separator)
         var perTestLength = FilterPrefixLength + averageTestNameLength + FilterSeparatorLength;
         if (batchSize * perTestLength > MaxFilterLength)
         {
