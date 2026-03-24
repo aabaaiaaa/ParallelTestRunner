@@ -27,7 +27,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `TestRunner.cs:13` and `RetryOrchestrator.cs:13` both define the same `TestResultLineRegex` pattern independently. Extract to a shared static class (e.g. `Patterns.cs`) and reference from both files to avoid drift. Verify existing tests still pass after the move.
 
 ### TASK-005: Remove RegexOptions.Compiled from GeneratedRegex
-- **Status**: pending
+- **Status**: done
 - **Priority**: low
 - **Dependencies**: TASK-004
 - **Description**: `RetryOrchestrator.cs:13` specifies `RegexOptions.Compiled` on a `[GeneratedRegex]` attribute. This is ignored since source-generated regexes are already compiled at build time. Remove `RegexOptions.Compiled` to match the other regex declarations in the codebase. No new tests needed.
