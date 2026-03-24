@@ -379,6 +379,42 @@ public class RetryOrchestratorTests
         CollectionAssert.Contains(retriedTests, "TestC");
     }
 
+    [TestMethod]
+    public void ParseTimedOutOutput_SimilarNames_MatchesExactly()
+    {
+        // When batch contains "Ns.Foo.Bar" and "Ns.Foo.Bar.Baz", output for
+        // "Ns.Foo.Bar.Baz" must match "Ns.Foo.Bar.Baz", not "Ns.Foo.Bar".
+        var output = new List<string>
+        {
+            "  Passed Ns.Foo.Bar [1s]",
+            "  Failed Ns.Foo.Bar.Baz [2s]",
+        };
+        var batchTests = new List<string> { "Ns.Foo.Bar", "Ns.Foo.Bar.Baz", "Ns.Foo.Qux" };
+
+        var (passed, failed, suspected) = RetryOrchestrator.ParseTimedOutOutput(output, batchTests);
+
+        CollectionAssert.AreEquivalent(new[] { "Ns.Foo.Bar" }, passed);
+        CollectionAssert.AreEquivalent(new[] { "Ns.Foo.Bar.Baz" }, failed);
+        Assert.AreEqual("Ns.Foo.Qux", suspected);
+    }
+
+    [TestMethod]
+    public void ParseTimedOutOutput_ParameterisedVariant_MatchesBaseTest()
+    {
+        // VSTest may output parameterised test names like "Ns.Test(1)" — should match FQN "Ns.Test"
+        var output = new List<string>
+        {
+            "  Passed Ns.Test(1) [1s]",
+        };
+        var batchTests = new List<string> { "Ns.Test", "Ns.TestOther" };
+
+        var (passed, failed, suspected) = RetryOrchestrator.ParseTimedOutOutput(output, batchTests);
+
+        CollectionAssert.AreEquivalent(new[] { "Ns.Test" }, passed);
+        Assert.AreEqual(0, failed.Count);
+        Assert.AreEqual("Ns.TestOther", suspected);
+    }
+
     /// <summary>
     /// Creates a fake RunAll that passes everything by default.
     /// </summary>

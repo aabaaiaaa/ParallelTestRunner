@@ -15,7 +15,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `TestRunner.cs:241` only includes `CapturedOutput` in the `BatchResult` for timed-out batches. When `RetryOrchestrator` processes non-timed-out failed batches (line 152), `CapturedOutput` is null, so `ParseTimedOutOutput` returns empty lists and **every test in the batch is marked as failed — even ones that passed**. This causes passed tests to be unnecessarily re-run, directly undermining the tool's core purpose of only retrying failures. Fix by including `CapturedOutput: outputLines` on all batch results, not just timed-out ones. Add `RetryOrchestratorTests` that verify only genuinely failed tests from a non-timed-out failed batch are retried, and that passed tests are not re-run.
 
 ### TASK-003: Fix fuzzy test-name matching in ParseTimedOutOutput
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: TASK-002
 - **Description**: `RetryOrchestrator.cs:308-309` uses bidirectional `Contains` to match test names from VSTest output to batch test FQNs. This is fragile — if a batch contains `Foo.Bar` and `Foo.Bar.Baz`, the output line for `Foo.Bar.Baz` could match `Foo.Bar` first. Since tests are FQNs and VSTest output includes the FQN, replace with exact match (falling back to ends-with if needed). Add `RetryOrchestratorTests` with similarly-named tests (e.g. `Ns.Foo.Bar` and `Ns.Foo.Bar.Baz`) to verify the correct test is matched.

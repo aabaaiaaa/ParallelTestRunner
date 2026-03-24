@@ -322,9 +322,10 @@ public static partial class RetryOrchestrator
                 var status = match.Groups[1].Value;
                 var testName = match.Groups[2].Value;
 
-                // Match against batch tests using contains (same as filter logic)
-                var matchedTest = batchTests.FirstOrDefault(t =>
-                    testName.Contains(t) || t.Contains(testName) || testName == t);
+                // Match against batch tests: prefer exact match, fall back to
+                // starts-with for parameterised variants (e.g. "Ns.Test(1)" starts with FQN "Ns.Test")
+                var matchedTest = batchTests.FirstOrDefault(t => testName == t)
+                    ?? batchTests.FirstOrDefault(t => testName.StartsWith(t + "("));
 
                 if (matchedTest is null) continue;
 
