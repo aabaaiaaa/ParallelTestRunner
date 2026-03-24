@@ -21,7 +21,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `RetryOrchestrator.cs:308-309` uses bidirectional `Contains` to match test names from VSTest output to batch test FQNs. This is fragile — if a batch contains `Foo.Bar` and `Foo.Bar.Baz`, the output line for `Foo.Bar.Baz` could match `Foo.Bar` first. Since tests are FQNs and VSTest output includes the FQN, replace with exact match (falling back to ends-with if needed). Add `RetryOrchestratorTests` with similarly-named tests (e.g. `Ns.Foo.Bar` and `Ns.Foo.Bar.Baz`) to verify the correct test is matched.
 
 ### TASK-004: Extract duplicate TestResultLineRegex to shared location
-- **Status**: pending
+- **Status**: done
 - **Priority**: medium
 - **Dependencies**: TASK-002, TASK-003
 - **Description**: `TestRunner.cs:13` and `RetryOrchestrator.cs:13` both define the same `TestResultLineRegex` pattern independently. Extract to a shared static class (e.g. `Patterns.cs`) and reference from both files to avoid drift. Verify existing tests still pass after the move.

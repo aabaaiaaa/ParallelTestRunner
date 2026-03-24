@@ -5,13 +5,9 @@ namespace ParallelTestRunner;
 
 public record BatchResult(int BatchIndex, int TestCount, int ExitCode, bool TimedOut = false, IReadOnlyList<string>? CapturedOutput = null);
 
-public static partial class TestRunner
+public static class TestRunner
 {
     private static readonly object ConsoleLock = new();
-
-    // Matches "  Passed TestName [Xs]" or "  Failed TestName [Xs]" from VSTest normal verbosity
-    [GeneratedRegex(@"^\s+(Passed|Failed)\s+.+\s+\[")]
-    private static partial Regex TestResultLineRegex();
 
     /// <summary>
     /// Runs all test batches in parallel, throttled by <paramref name="options"/>.MaxParallelism.
@@ -132,7 +128,7 @@ public static partial class TestRunner
                     // Track individual test pass/fail for progress reporting
                     if (progress is not null)
                     {
-                        var match = TestResultLineRegex().Match(e.Data);
+                        var match = Patterns.TestResultLineRegex().Match(e.Data);
                         if (match.Success)
                         {
                             if (match.Groups[1].Value == "Passed")

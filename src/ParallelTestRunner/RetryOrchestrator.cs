@@ -8,11 +8,8 @@ public record RetryResult(
     IReadOnlyList<string> PersistentFailures,
     int RetryRoundsPerformed);
 
-public static partial class RetryOrchestrator
+public static class RetryOrchestrator
 {
-    [GeneratedRegex(@"^\s+(Passed|Failed)\s+(.+?)\s+\[", RegexOptions.Compiled)]
-    private static partial Regex TestResultLineRegex();
-
     /// <summary>
     /// Orchestrates retries for failed/timed-out batches with integrated hang detection.
     /// Timed-out batches have their output parsed to extract suspected hangers; remaining
@@ -313,7 +310,7 @@ public static partial class RetryOrchestrator
 
         if (capturedOutput is not null)
         {
-            var regex = TestResultLineRegex();
+            var regex = Patterns.TestResultLineRegex();
             foreach (var line in capturedOutput)
             {
                 var match = regex.Match(line);
