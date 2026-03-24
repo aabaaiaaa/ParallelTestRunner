@@ -45,7 +45,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `Options.cs:10` uses `string[] ExtraDotnetTestArgs = default!` — a null-forgiving operator on a null default. The property initializer on line 18 catches it, but the constructor parameter lies to the nullable analyzer. Change the default to `[]` instead of `default!`. No new tests needed.
 
 ### TASK-008: Use DateTime.UtcNow for results directory timestamp
-- **Status**: pending
+- **Status**: done
 - **Priority**: low
 - **Dependencies**: none
 - **Description**: `Program.cs:141` uses `DateTime.Now` for the timestamped results subdirectory. Two concurrent runs within the same second could collide, and DST transitions create ambiguity. Switch to `DateTime.UtcNow`. No new tests needed.

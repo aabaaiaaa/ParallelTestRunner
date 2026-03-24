@@ -138,7 +138,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Create a timestamped subfolder for results so runs don't collide
     if (resultsDir is not null)
     {
-        resultsDir = Path.Combine(resultsDir, $"run_{DateTime.Now:yyyyMMddTHHmmss}");
+        resultsDir = Path.Combine(resultsDir, $"run_{DateTime.UtcNow:yyyyMMddTHHmmss}");
         Directory.CreateDirectory(resultsDir);
     }
 
