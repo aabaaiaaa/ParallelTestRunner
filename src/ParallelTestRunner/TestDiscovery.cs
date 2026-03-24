@@ -105,6 +105,13 @@ public static partial class TestDiscovery
     /// <summary>
     /// Runs <c>dotnet vstest &lt;dll&gt; --ListFullyQualifiedTests</c> to get FQN test names.
     /// </summary>
+    /// <remarks>
+    /// <c>dotnet vstest</c> is deprecated by Microsoft in favour of <c>dotnet test</c>.
+    /// However, as of .NET 10, <c>dotnet test --list-tests</c> only returns display names,
+    /// not fully-qualified names. Since FQN filtering is essential for precise batch execution,
+    /// we continue to use <c>dotnet vstest --ListFullyQualifiedTests</c> until a future
+    /// <c>dotnet test</c> version provides equivalent FQN discovery capability.
+    /// </remarks>
     private static async Task<IReadOnlyList<string>> DiscoverFqnTestsAsync(
         string dllPath, CancellationToken ct)
     {

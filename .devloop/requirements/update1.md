@@ -51,7 +51,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `Program.cs:141` uses `DateTime.Now` for the timestamped results subdirectory. Two concurrent runs within the same second could collide, and DST transitions create ambiguity. Switch to `DateTime.UtcNow`. No new tests needed.
 
 ### TASK-009: Document dotnet vstest deprecation
-- **Status**: pending
+- **Status**: done
 - **Priority**: low
 - **Dependencies**: none
 - **Description**: `TestDiscovery.cs:108` — `dotnet vstest` is deprecated by Microsoft in favour of `dotnet test`, but as of .NET 10 it remains the only way to discover fully-qualified test names (`dotnet test --list-tests` only returns display names). Add an XML doc comment on `DiscoverFqnTestsAsync` explaining this is a known deprecation and should be migrated if a future `dotnet test` version adds FQN discovery. No new tests needed.

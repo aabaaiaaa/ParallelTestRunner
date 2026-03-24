@@ -2,14 +2,14 @@
   "feature": "update1",
   "phase": "run",
   "sessionId": null,
-  "lastIteration": 8,
+  "lastIteration": 9,
   "startedAt": "2026-03-24T11:08:50.413Z",
   "requirementsPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\requirements\\update1.md",
   "progressPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\progress\\update1.md",
   "activeTask": {
-    "taskId": "TASK-008",
-    "taskTitle": "Use DateTime.UtcNow for results directory timestamp",
-    "iterationNumber": 8,
-    "startedAt": "2026-03-24T11:47:15.279Z"
+    "taskId": "TASK-009",
+    "taskTitle": "Document dotnet vstest deprecation",
+    "iterationNumber": 9,
+    "startedAt": "2026-03-24T11:47:38.179Z"
   }
 }
