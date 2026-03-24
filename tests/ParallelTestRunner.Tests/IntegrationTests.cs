@@ -31,7 +31,7 @@ public class IntegrationTests
         var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-tests 10 --max-parallelism 8 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
-        StringAssert.Contains(result.Stderr, "Discovered 66 tests");
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
         StringAssert.Contains(result.Stderr, "Limited to 10 tests");
     }
 
@@ -88,11 +88,11 @@ public class IntegrationTests
     [TestMethod]
     public void LongFilterString_AutoSplitsWhenExceedingLimit()
     {
-        // 66 tests with FQN prefix exceeds 7000-char filter limit, auto-splits into 2 batches
+        // 70 tests with FQN prefix exceeds 7000-char filter limit, auto-splits into batches
         var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 8 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
-        StringAssert.Contains(result.Stderr, "Discovered 66 tests");
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
         StringAssert.Contains(result.Stderr, "Created 2 batches");
     }
 
@@ -121,8 +121,8 @@ public class IntegrationTests
         var result = RunTool($"\"{_dummyProjectPath}\" --skip-tests 50 --batch-size 100 --max-parallelism 8 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
-        StringAssert.Contains(result.Stderr, "Discovered 66 tests");
-        StringAssert.Contains(result.Stderr, "Skipped first 50 tests, 16 remaining");
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+        StringAssert.Contains(result.Stderr, "Skipped first 50 tests, 20 remaining");
     }
 
     [TestMethod]
@@ -131,7 +131,7 @@ public class IntegrationTests
         var result = RunTool($"\"{_dummyProjectPath}\" --skip-tests 5 --max-tests 10 --batch-size 100 --max-parallelism 8 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
-        StringAssert.Contains(result.Stderr, "Skipped first 5 tests, 61 remaining");
+        StringAssert.Contains(result.Stderr, "Skipped first 5 tests, 65 remaining");
         StringAssert.Contains(result.Stderr, "Limited to 10 tests (--max-tests 10)");
     }
 
@@ -193,9 +193,9 @@ public class IntegrationTests
     [TestMethod]
     public void AutoRetry_OnlyRetriesFailedBatches_NotPassingTests()
     {
-        // With batch-size 5, the 3 FailableTests end up in the last batch (tests 64-66).
-        // The other 12 batches pass. Auto-retry should only re-run the failed batch's tests,
-        // not all 66 tests, and stop after 1 round of no progress.
+        // With batch-size 5, the 3 FailableTests end up in a batch.
+        // The other batches pass. Auto-retry should only re-run the failed batch's tests,
+        // not all 70 tests, and stop after 1 round of no progress.
         var result = RunTool(
             $"\"{_dummyProjectPath}\" --batch-size 5 --max-parallelism 8 --auto-retry --idle-timeout 30",
             environmentOverrides: new Dictionary<string, string> { ["FAIL_TESTS"] = "1" });
@@ -204,7 +204,7 @@ public class IntegrationTests
         // Auto-retry should stop after detecting no progress — proves it doesn't loop
         StringAssert.Contains(result.Stderr, "Auto-retry: no progress this round");
         // Only the failed batch's tests should be retried (6 or fewer), not all 66
-        Assert.IsFalse(result.Stderr.Contains("Re-running 66 test(s)"),
+        Assert.IsFalse(result.Stderr.Contains("Re-running 70 test(s)"),
             $"Should not retry all tests.\nStderr:\n{result.Stderr}");
     }
 
@@ -224,6 +224,63 @@ public class IntegrationTests
         Assert.IsTrue(
             combined.Contains("teamcity") || combined.Contains("Logger"),
             $"Expected TeamCity logger reference in output.\nStdout:\n{result.Stdout}\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void Logger_EmitsPtrLinesWithFqn()
+    {
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-tests 5 --max-parallelism 1 --retries 0");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        // The custom logger should emit ##ptr lines with FQN data
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN="),
+            $"Expected ##ptr lines in stdout.\nStdout:\n{result.Stdout}");
+    }
+
+    [TestMethod]
+    public void Logger_EmitsDisplayNameSeparateFromFqn()
+    {
+        // Run enough tests to include the DisplayName tests
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        // Verify a ##ptr line exists where FQN contains the method name and Name contains the display name
+        Assert.IsTrue(result.Stdout.Contains("FQN=DummyTestProject.DisplayNames.DisplayNameTests.Addition_PositiveNumbers_ReturnsSum"),
+            $"Expected FQN for display name test in stdout.\nStdout:\n{result.Stdout}");
+        Assert.IsTrue(result.Stdout.Contains("Name=Adding two positive numbers returns correct sum"),
+            $"Expected display name in ##ptr line.\nStdout:\n{result.Stdout}");
+    }
+
+    [TestMethod]
+    public void Logger_RetryIdentifiesFailedTestByFqn_NotDisplayName()
+    {
+        // Trigger failure on the display-name test, then verify retry output references the FQN.
+        // Uses --retries 2 so that persistent failure detection kicks in (needs 2 consecutive rounds).
+        var result = RunTool(
+            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 2 --idle-timeout 30",
+            environmentOverrides: new Dictionary<string, string> { ["FAIL_DISPLAY_NAME_TESTS"] = "1" });
+
+        Assert.AreEqual(1, result.ExitCode, $"Expected exit code 1 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        // The retry should only retry the 1 failed test, not all 70
+        Assert.IsTrue(result.Stderr.Contains("Re-running 1 test(s)"),
+            $"Expected only 1 test retried.\nStderr:\n{result.Stderr}");
+        // The persistent failure should be reported by FQN, not display name
+        Assert.IsTrue(result.Stderr.Contains("DisplayName_ConditionalFailure"),
+            $"Expected FQN-based persistent failure report.\nStderr:\n{result.Stderr}");
+        // Should NOT contain only the display name without FQN context
+        Assert.IsFalse(result.Stderr.Contains("Persistent failure: This display name test should fail"),
+            $"Persistent failure should use FQN, not display name.\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void Logger_ProgressCountsAccurateWithDisplayNames()
+    {
+        // Run all tests including display-name tests — progress should count correctly
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        // 70 tests total (66 original + 4 display name tests)
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
     }
 
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
@@ -263,6 +320,8 @@ public class IntegrationTests
             process.StartInfo.Environment.Remove("HANG_TEST");
         if (environmentOverrides is null || !environmentOverrides.ContainsKey("FAIL_ONCE"))
             process.StartInfo.Environment.Remove("FAIL_ONCE");
+        if (environmentOverrides is null || !environmentOverrides.ContainsKey("FAIL_DISPLAY_NAME_TESTS"))
+            process.StartInfo.Environment.Remove("FAIL_DISPLAY_NAME_TESTS");
 
         var stdout = new System.Text.StringBuilder();
         var stderr = new System.Text.StringBuilder();

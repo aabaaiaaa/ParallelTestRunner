@@ -16,6 +16,12 @@
     <Version>1.0.0</Version>
     <Authors>ParallelTestRunner Contributors</Authors>
     <Description>A dotnet tool that discovers MSTest tests, splits them into configurable batches, and runs multiple dotnet test processes in parallel with real-time output forwarding.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Exclude satellite resource DLLs and PDBs from the package -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +30,14 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta5.25306.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ParallelTestRunner.TestLogger\ParallelTestRunner.TestLogger.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

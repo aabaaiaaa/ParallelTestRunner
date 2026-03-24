@@ -70,7 +70,7 @@ public class RetryOrchestratorTests
         // Batch with 4 tests, times out. Output shows TestA passed, TestB is the hanger.
         var capturedOutput = new List<string>
         {
-            "  Passed TestA [1s]",
+            "##ptr[Passed|FQN=TestA|Name=Test A Display]",
         };
         var results = new[]
         {
@@ -129,7 +129,7 @@ public class RetryOrchestratorTests
     {
         var capturedOutput = new List<string>
         {
-            "  Passed TestA [1s]",
+            "##ptr[Passed|FQN=TestA|Name=Test A Display]",
         };
         var results = new[]
         {
@@ -159,7 +159,7 @@ public class RetryOrchestratorTests
     {
         var capturedOutput = new List<string>
         {
-            "  Passed TestA [1s]",
+            "##ptr[Passed|FQN=TestA|Name=Test A Display]",
         };
         var results = new[]
         {
@@ -278,9 +278,9 @@ public class RetryOrchestratorTests
         var output = new List<string>
         {
             "Build started...",
-            "  Passed TestA [1s]",
-            "  Passed TestB [2s]",
-            "  Failed TestC [500ms]",
+            "##ptr[Passed|FQN=TestA|Name=Test A]",
+            "##ptr[Passed|FQN=TestB|Name=Test B]",
+            "##ptr[Failed|FQN=TestC|Name=Test C]",
             "Some other line",
         };
         var batchTests = new List<string> { "TestA", "TestB", "TestC", "TestD", "TestE" };
@@ -313,9 +313,9 @@ public class RetryOrchestratorTests
         var capturedOutput = new List<string>
         {
             "Build started...",
-            "  Passed TestA [1s]",
-            "  Passed TestB [2s]",
-            "  Failed TestC [500ms]",
+            "##ptr[Passed|FQN=TestA|Name=Test A]",
+            "##ptr[Passed|FQN=TestB|Name=Test B]",
+            "##ptr[Failed|FQN=TestC|Name=Test C]",
         };
         var results = new[]
         {
@@ -382,12 +382,12 @@ public class RetryOrchestratorTests
     [TestMethod]
     public void ParseTimedOutOutput_SimilarNames_MatchesExactly()
     {
-        // When batch contains "Ns.Foo.Bar" and "Ns.Foo.Bar.Baz", output for
-        // "Ns.Foo.Bar.Baz" must match "Ns.Foo.Bar.Baz", not "Ns.Foo.Bar".
+        // When batch contains "Ns.Foo.Bar" and "Ns.Foo.Bar.Baz", ##ptr FQNs
+        // must match exactly — "Ns.Foo.Bar.Baz" must not match "Ns.Foo.Bar".
         var output = new List<string>
         {
-            "  Passed Ns.Foo.Bar [1s]",
-            "  Failed Ns.Foo.Bar.Baz [2s]",
+            "##ptr[Passed|FQN=Ns.Foo.Bar|Name=Bar Display]",
+            "##ptr[Failed|FQN=Ns.Foo.Bar.Baz|Name=Baz Display]",
         };
         var batchTests = new List<string> { "Ns.Foo.Bar", "Ns.Foo.Bar.Baz", "Ns.Foo.Qux" };
 
@@ -399,9 +399,26 @@ public class RetryOrchestratorTests
     }
 
     [TestMethod]
-    public void ParseTimedOutOutput_ParameterisedVariant_MatchesBaseTest()
+    public void ParseTimedOutOutput_PtrLogger_MatchesByFqn()
     {
-        // VSTest may output parameterised test names like "Ns.Test(1)" — should match FQN "Ns.Test"
+        // ##ptr logger emits the base FQN even for parameterised tests — exact match works
+        var output = new List<string>
+        {
+            "##ptr[Passed|FQN=Ns.Test|Name=Ns.Test (1)]",
+        };
+        var batchTests = new List<string> { "Ns.Test", "Ns.TestOther" };
+
+        var (passed, failed, suspected) = RetryOrchestrator.ParseTimedOutOutput(output, batchTests);
+
+        CollectionAssert.AreEquivalent(new[] { "Ns.Test" }, passed);
+        Assert.AreEqual(0, failed.Count);
+        Assert.AreEqual("Ns.TestOther", suspected);
+    }
+
+    [TestMethod]
+    public void ParseTimedOutOutput_LegacyFallback_ParameterisedVariant_MatchesBaseTest()
+    {
+        // When ##ptr lines are absent, falls back to display-name parsing with StartsWith
         var output = new List<string>
         {
             "  Passed Ns.Test(1) [1s]",
@@ -413,6 +430,34 @@ public class RetryOrchestratorTests
         CollectionAssert.AreEquivalent(new[] { "Ns.Test" }, passed);
         Assert.AreEqual(0, failed.Count);
         Assert.AreEqual("Ns.TestOther", suspected);
+    }
+
+    [TestMethod]
+    public void ParseTimedOutOutput_DisplayNameDiffersFromFqn_PtrLoggerMatchesByFqn()
+    {
+        // The critical scenario: display name is completely different from FQN.
+        // ##ptr lines contain the FQN, so matching works even when display names diverge.
+        var output = new List<string>
+        {
+            "  Passed Adding two positive numbers returns correct sum [1s]",
+            "##ptr[Passed|FQN=DummyTestProject.DisplayNames.DisplayNameTests.Addition_PositiveNumbers_ReturnsSum|Name=Adding two positive numbers returns correct sum]",
+            "  Failed This display name test should fail when triggered [2s]",
+            "##ptr[Failed|FQN=DummyTestProject.DisplayNames.DisplayNameTests.DisplayName_ConditionalFailure|Name=This display name test should fail when triggered]",
+        };
+        var batchTests = new List<string>
+        {
+            "DummyTestProject.DisplayNames.DisplayNameTests.Addition_PositiveNumbers_ReturnsSum",
+            "DummyTestProject.DisplayNames.DisplayNameTests.DisplayName_ConditionalFailure",
+            "DummyTestProject.DisplayNames.DisplayNameTests.Subtraction_BasicOperation_Works",
+        };
+
+        var (passed, failed, suspected) = RetryOrchestrator.ParseTimedOutOutput(output, batchTests);
+
+        CollectionAssert.AreEquivalent(
+            new[] { "DummyTestProject.DisplayNames.DisplayNameTests.Addition_PositiveNumbers_ReturnsSum" }, passed);
+        CollectionAssert.AreEquivalent(
+            new[] { "DummyTestProject.DisplayNames.DisplayNameTests.DisplayName_ConditionalFailure" }, failed);
+        Assert.AreEqual("DummyTestProject.DisplayNames.DisplayNameTests.Subtraction_BasicOperation_Works", suspected);
     }
 
     /// <summary>

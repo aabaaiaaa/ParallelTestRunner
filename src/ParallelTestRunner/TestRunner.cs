@@ -125,16 +125,32 @@ public static class TestRunner
                         outputLines.Add(e.Data);
                     }
 
-                    // Track individual test pass/fail for progress reporting
+                    // Track individual test pass/fail for progress reporting.
+                    // Only count from ##ptr lines (custom logger with FQN) to avoid
+                    // double-counting when both ##ptr and display-name lines are present.
+                    // Falls back to display-name lines only if no ##ptr lines exist.
                     if (progress is not null)
                     {
-                        var match = Patterns.TestResultLineRegex().Match(e.Data);
-                        if (match.Success)
+                        var ptrMatch = Patterns.PtrLoggerLineRegex().Match(e.Data);
+                        if (ptrMatch.Success)
                         {
-                            if (match.Groups[1].Value == "Passed")
+                            progress.SetPtrLoggerActive();
+                            if (ptrMatch.Groups[1].Value == "Passed")
                                 progress.IncrementPassed();
-                            else
+                            else if (ptrMatch.Groups[1].Value == "Failed")
                                 progress.IncrementFailed();
+                        }
+                        else if (!progress.IsPtrLoggerActive)
+                        {
+                            // Fallback to display-name lines for progress if ##ptr not available
+                            var match = Patterns.TestResultLineRegex().Match(e.Data);
+                            if (match.Success)
+                            {
+                                if (match.Groups[1].Value == "Passed")
+                                    progress.IncrementPassed();
+                                else
+                                    progress.IncrementFailed();
+                            }
                         }
                     }
 
@@ -261,6 +277,15 @@ public static class TestRunner
         }
     }
 
+    /// <summary>
+    /// Resolves the directory containing the ParallelTestRunner.TestLogger.dll,
+    /// which is deployed alongside the tool when packed as a dotnet tool.
+    /// </summary>
+    internal static string GetLoggerDirectory()
+    {
+        return AppContext.BaseDirectory;
+    }
+
     private static string BuildArguments(Options options, string filterString, int batchIndex)
     {
         var args = new List<string>
@@ -273,11 +298,18 @@ public static class TestRunner
             Quote(filterString)
         };
 
+        // Always add the custom ##ptr logger for accurate FQN tracking
+        var loggerDir = GetLoggerDirectory();
+        args.Add("--test-adapter-path");
+        args.Add(Quote(loggerDir));
+        args.Add("--logger");
+        args.Add("ParallelTestRunner");
+
         // Auto-detect TeamCity
         if (Environment.GetEnvironmentVariable("TEAMCITY_VERSION") is not null)
         {
-            args.Add("/TestAdapterPath:.");
-            args.Add("/Logger:teamcity");
+            args.Add("--logger");
+            args.Add("teamcity");
         }
 
         // TRX logging if results directory specified
@@ -322,6 +354,7 @@ internal sealed class ProgressTracker
     private int _completedBatches;
     private int _passedTests;
     private int _failedTests;
+    private int _ptrLoggerActive;
 
     public ProgressTracker(int totalBatches, int totalTests)
     {
@@ -331,6 +364,12 @@ internal sealed class ProgressTracker
 
     public void IncrementPassed() => Interlocked.Increment(ref _passedTests);
     public void IncrementFailed() => Interlocked.Increment(ref _failedTests);
+
+    /// <summary>Marks that ##ptr lines have been seen, disabling display-name fallback counting.</summary>
+    public void SetPtrLoggerActive() => Interlocked.Exchange(ref _ptrLoggerActive, 1);
+
+    /// <summary>Returns true if ##ptr lines have been seen from any batch.</summary>
+    public bool IsPtrLoggerActive => Volatile.Read(ref _ptrLoggerActive) == 1;
 
     public void BatchCompleted(BatchResult result)
     {

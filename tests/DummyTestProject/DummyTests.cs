@@ -2,6 +2,47 @@ using System.Runtime.CompilerServices;
 
 [assembly: Parallelize(Workers = 4, Scope = ExecutionScope.MethodLevel)]
 
+namespace DummyTestProject.DisplayNames
+{
+    /// <summary>
+    /// Tests with explicit [DisplayName] attributes where the display name differs from the FQN.
+    /// Used to verify the custom ##ptr logger correctly reports FQNs for retry matching.
+    /// </summary>
+    [TestClass]
+    public class DisplayNameTests
+    {
+        [TestMethod("Adding two positive numbers returns correct sum")]
+        public void Addition_PositiveNumbers_ReturnsSum()
+        {
+            Assert.AreEqual(5, 2 + 3);
+        }
+
+        [TestMethod("Subtracting gives the right answer")]
+        public void Subtraction_BasicOperation_Works()
+        {
+            Assert.AreEqual(3, 7 - 4);
+        }
+
+        [TestMethod("Multiplying two numbers together")]
+        public void Multiplication_TwoNumbers_Correct()
+        {
+            Assert.AreEqual(42, 6 * 7);
+        }
+
+        private static bool ShouldFail =>
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FAIL_DISPLAY_NAME_TESTS"));
+
+        [TestMethod("This display name test should fail when triggered")]
+        public void DisplayName_ConditionalFailure()
+        {
+            if (ShouldFail)
+                Assert.Fail("FAIL_DISPLAY_NAME_TESTS is set — deliberate failure");
+
+            Assert.IsTrue(true);
+        }
+    }
+}
+
 namespace DummyTestProject.Arithmetic
 {
     [TestClass]
