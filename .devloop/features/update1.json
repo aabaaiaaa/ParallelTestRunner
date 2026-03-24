@@ -2,14 +2,14 @@
   "feature": "update1",
   "phase": "run",
   "sessionId": null,
-  "lastIteration": 6,
+  "lastIteration": 7,
   "startedAt": "2026-03-24T11:08:50.413Z",
   "requirementsPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\requirements\\update1.md",
   "progressPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\progress\\update1.md",
   "activeTask": {
-    "taskId": "TASK-006",
-    "taskTitle": "Clean up trackedProcesses after process exit",
-    "iterationNumber": 6,
-    "startedAt": "2026-03-24T11:36:07.338Z"
+    "taskId": "TASK-007",
+    "taskTitle": "Fix Options.ExtraDotnetTestArgs default value",
+    "iterationNumber": 7,
+    "startedAt": "2026-03-24T11:46:25.522Z"
   }
 }

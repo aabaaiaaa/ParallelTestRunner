@@ -7,7 +7,7 @@ public record Options(
     int MaxTests = 0,
     int Retries = 2,
     bool AutoRetry = false,
-    string[] ExtraDotnetTestArgs = default!,
+    string[]? ExtraDotnetTestArgs = null,
     string? ResultsDirectory = null,
     TimeSpan IdleTimeout = default)
 {

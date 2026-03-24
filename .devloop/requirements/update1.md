@@ -39,7 +39,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `TestRunner.cs:25-26,170-173` — processes are added to `trackedProcesses` but never removed after they exit, holding references to disposed `Process` objects for the lifetime of `RunAllAsync`. Remove processes from the list after they exit. No new tests needed (internal cleanup).
 
 ### TASK-007: Fix Options.ExtraDotnetTestArgs default value
-- **Status**: pending
+- **Status**: done
 - **Priority**: low
 - **Dependencies**: none
 - **Description**: `Options.cs:10` uses `string[] ExtraDotnetTestArgs = default!` — a null-forgiving operator on a null default. The property initializer on line 18 catches it, but the constructor parameter lies to the nullable analyzer. Change the default to `[]` instead of `default!`. No new tests needed.
