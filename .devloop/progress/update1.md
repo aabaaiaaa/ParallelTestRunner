@@ -2,9 +2,9 @@
 
 ## Summary
 - **Total Tasks**: 10
-- **Completed**: 5
-- **Remaining**: 5
-- **Last Updated**: 2026-03-24T11:36:03.287Z
+- **Completed**: 6
+- **Remaining**: 4
+- **Last Updated**: 2026-03-24T11:46:21.421Z
 
 ## Iteration Log
 
@@ -47,4 +47,12 @@
 - **Exit Status**: success
 - **Tokens**: 139,792 total (9 in, 944 out, 12,155 cache-create, 126,684 cache-read)
 - **Cost**: $0.1630
+
+### Iteration 6 - 2026-03-24T11:36:07.335Z
+- **Task Completed**: TASK-006
+- **Summary**: Completed Clean up trackedProcesses after process exit
+- **Duration**: 614s
+- **Exit Status**: success
+- **Tokens**: 27,351 total (3 in, 38 out, 303 cache-create, 27,007 cache-read)
+- **Cost**: $0.3435
 

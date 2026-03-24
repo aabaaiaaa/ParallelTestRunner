@@ -224,6 +224,11 @@ public static class TestRunner
                             Console.Error.WriteLine($"  *** Batch {batchIndex} IDLE TIMEOUT — no output for {elapsed.TotalSeconds:F0}s ***");
                         }
 
+                        lock (processLock)
+                        {
+                            trackedProcesses.Remove(process);
+                        }
+
                         var timedOutResult = new BatchResult(batchIndex, batch.Count, -1, TimedOut: true, CapturedOutput: snapshot);
                         progress?.BatchCompleted(timedOutResult);
                         return timedOutResult;
@@ -232,6 +237,12 @@ public static class TestRunner
             }
 
             var exitCode = await tcs.Task;
+
+            lock (processLock)
+            {
+                trackedProcesses.Remove(process);
+            }
+
             ct.ThrowIfCancellationRequested();
 
             List<string> finalOutput;

@@ -33,7 +33,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `RetryOrchestrator.cs:13` specifies `RegexOptions.Compiled` on a `[GeneratedRegex]` attribute. This is ignored since source-generated regexes are already compiled at build time. Remove `RegexOptions.Compiled` to match the other regex declarations in the codebase. No new tests needed.
 
 ### TASK-006: Clean up trackedProcesses after process exit
-- **Status**: pending
+- **Status**: done
 - **Priority**: low
 - **Dependencies**: none
 - **Description**: `TestRunner.cs:25-26,170-173` — processes are added to `trackedProcesses` but never removed after they exit, holding references to disposed `Process` objects for the lifetime of `RunAllAsync`. Remove processes from the list after they exit. No new tests needed (internal cleanup).
