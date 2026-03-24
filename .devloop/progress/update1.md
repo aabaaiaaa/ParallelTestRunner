@@ -2,9 +2,9 @@
 
 ## Summary
 - **Total Tasks**: 10
-- **Completed**: 1
-- **Remaining**: 9
-- **Last Updated**: 2026-03-24T11:10:15.156Z
+- **Completed**: 2
+- **Remaining**: 8
+- **Last Updated**: 2026-03-24T11:27:00.934Z
 
 ## Iteration Log
 
@@ -15,4 +15,12 @@
 - **Exit Status**: success
 - **Tokens**: 165,471 total (9 in, 3,775 out, 18,979 cache-create, 142,708 cache-read)
 - **Cost**: $0.2844
+
+### Iteration 2 - 2026-03-24T11:10:19.567Z
+- **Task Completed**: TASK-002
+- **Summary**: Completed Include CapturedOutput on all batch results
+- **Duration**: 1001s
+- **Exit Status**: success
+- **Tokens**: 52,568 total (3 in, 38 out, 698 cache-create, 51,829 cache-read)
+- **Cost**: $1.0715
 

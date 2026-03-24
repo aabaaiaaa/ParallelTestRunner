@@ -305,6 +305,80 @@ public class RetryOrchestratorTests
         Assert.AreEqual("TestA", suspected);
     }
 
+    [TestMethod]
+    public async Task FailedBatch_WithCapturedOutput_OnlyRetriesFailedTests()
+    {
+        // Simulate a non-timed-out failed batch where 2 tests passed and 1 failed.
+        // Only the failed test should be retried, not the passed ones.
+        var capturedOutput = new List<string>
+        {
+            "Build started...",
+            "  Passed TestA [1s]",
+            "  Passed TestB [2s]",
+            "  Failed TestC [500ms]",
+        };
+        var results = new[]
+        {
+            new BatchResult(0, 3, 1, CapturedOutput: capturedOutput), // failed, NOT timed out
+            new BatchResult(1, 2, 0), // passed
+        };
+        var batches = new List<IReadOnlyList<string>>
+        {
+            new[] { "TestA", "TestB", "TestC" },
+            new[] { "TestD", "TestE" },
+        };
+
+        var retriedTests = new List<string>();
+        var result = await RetryOrchestrator.RunAsync(
+            results, batches, DefaultOptions with { Retries = 1 },
+            (retryBatches, opts, ct) =>
+            {
+                foreach (var b in retryBatches)
+                    retriedTests.AddRange(b);
+                return Task.FromResult(retryBatches.Select((b, i) =>
+                    new BatchResult(i, b.Count, 0)).ToArray());
+            },
+            CancellationToken.None);
+
+        // Only TestC (the failed test) should have been retried
+        CollectionAssert.Contains(retriedTests, "TestC");
+        CollectionAssert.DoesNotContain(retriedTests, "TestA", "Passed test should not be retried");
+        CollectionAssert.DoesNotContain(retriedTests, "TestB", "Passed test should not be retried");
+        CollectionAssert.DoesNotContain(retriedTests, "TestD", "Test from passing batch should not be retried");
+    }
+
+    [TestMethod]
+    public async Task FailedBatch_NullCapturedOutput_RetriesAllTests()
+    {
+        // When CapturedOutput is null (shouldn't happen after the fix, but defensively),
+        // all tests in the batch should be retried since we can't tell which passed.
+        var results = new[]
+        {
+            new BatchResult(0, 3, 1, CapturedOutput: null), // failed, no output
+        };
+        var batches = new List<IReadOnlyList<string>>
+        {
+            new[] { "TestA", "TestB", "TestC" },
+        };
+
+        var retriedTests = new List<string>();
+        var result = await RetryOrchestrator.RunAsync(
+            results, batches, DefaultOptions with { Retries = 1 },
+            (retryBatches, opts, ct) =>
+            {
+                foreach (var b in retryBatches)
+                    retriedTests.AddRange(b);
+                return Task.FromResult(retryBatches.Select((b, i) =>
+                    new BatchResult(i, b.Count, 0)).ToArray());
+            },
+            CancellationToken.None);
+
+        // All tests should be retried since we have no output to distinguish passed from failed
+        CollectionAssert.Contains(retriedTests, "TestA");
+        CollectionAssert.Contains(retriedTests, "TestB");
+        CollectionAssert.Contains(retriedTests, "TestC");
+    }
+
     /// <summary>
     /// Creates a fake RunAll that passes everything by default.
     /// </summary>

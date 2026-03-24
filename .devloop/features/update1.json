@@ -2,14 +2,14 @@
   "feature": "update1",
   "phase": "run",
   "sessionId": null,
-  "lastIteration": 1,
+  "lastIteration": 2,
   "startedAt": "2026-03-24T11:08:50.413Z",
   "requirementsPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\requirements\\update1.md",
   "progressPath": "C:\\Users\\jeastaugh\\source\\repos\\Experiments\\ParallelTestRunner\\.devloop\\progress\\update1.md",
   "activeTask": {
-    "taskId": "TASK-001",
-    "taskTitle": "Fix AutoTuner filter prefix length",
-    "iterationNumber": 1,
-    "startedAt": "2026-03-24T11:08:50.436Z"
+    "taskId": "TASK-002",
+    "taskTitle": "Include CapturedOutput on all batch results",
+    "iterationNumber": 2,
+    "startedAt": "2026-03-24T11:10:19.580Z"
   }
 }

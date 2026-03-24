@@ -66,6 +66,7 @@ public static partial class RetryOrchestrator
                 break; // All passed
 
             var retryPool = new List<string>();
+            var alreadyPassed = new HashSet<string>(); // Tests that passed in the initial run
 
             // Handle timed-out batches — parse output to find suspected hangers
             foreach (var idx in timedOut)
@@ -73,6 +74,8 @@ public static partial class RetryOrchestrator
                 var batchTests = originalBatches[results[idx].BatchIndex];
                 var (completedPassed, completedFailed, suspectedHanger) =
                     ParseTimedOutOutput(results[idx].CapturedOutput, batchTests);
+
+                foreach (var t in completedPassed) alreadyPassed.Add(t);
 
                 if (suspectedHanger is not null &&
                     !confirmedHangers.Contains(suspectedHanger) &&
@@ -100,10 +103,24 @@ public static partial class RetryOrchestrator
                 }
             }
 
-            // Handle failed (but completed) batches — retry all their tests
+            // Handle failed (but completed) batches — parse output to only retry failed/unaccounted tests
             foreach (var idx in failed)
             {
-                retryPool.AddRange(originalBatches[results[idx].BatchIndex]);
+                var batchTests = originalBatches[results[idx].BatchIndex];
+                var (completedPassed, completedFailed, _) =
+                    ParseTimedOutOutput(results[idx].CapturedOutput, batchTests);
+
+                foreach (var t in completedPassed) alreadyPassed.Add(t);
+                retryPool.AddRange(completedFailed);
+
+                // Tests with no output line are unaccounted — treat as failed
+                var accounted = new HashSet<string>(completedPassed);
+                accounted.UnionWith(completedFailed);
+                foreach (var test in batchTests)
+                {
+                    if (!accounted.Contains(test))
+                        retryPool.Add(test);
+                }
             }
 
             // Remove known/suspected hangers, resolved tests, and persistent failures from retry pool
@@ -198,6 +215,7 @@ public static partial class RetryOrchestrator
                     var batchTests = originalBatches[results[i].BatchIndex];
                     var allAccountedFor = batchTests.All(t =>
                         passedTests.Contains(t) ||
+                        alreadyPassed.Contains(t) ||
                         resolvedTests.Contains(t) ||
                         persistentFailures.Contains(t) ||
                         confirmedHangers.Contains(t) ||

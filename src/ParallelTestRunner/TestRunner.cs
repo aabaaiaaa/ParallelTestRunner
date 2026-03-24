@@ -238,7 +238,13 @@ public static partial class TestRunner
             var exitCode = await tcs.Task;
             ct.ThrowIfCancellationRequested();
 
-            var result = new BatchResult(batchIndex, batch.Count, exitCode);
+            List<string> finalOutput;
+            lock (outputLock)
+            {
+                finalOutput = [.. outputLines];
+            }
+
+            var result = new BatchResult(batchIndex, batch.Count, exitCode, CapturedOutput: finalOutput);
             progress?.BatchCompleted(result);
             return result;
         }

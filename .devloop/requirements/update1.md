@@ -9,7 +9,7 @@ Bug fixes, correctness improvements, and minor cleanups identified during code r
 - **Description**: `AutoTuner.cs:6` defines `FilterPrefixLength = 5` with comment `"Name~"`, but `TestBatcher` uses `"FullyQualifiedName="` (19 chars). Change `FilterPrefixLength` to 19 and update the comment. Update existing `AutoTunerTests` to verify batch sizes respect the actual `FullyQualifiedName=` prefix length.
 
 ### TASK-002: Include CapturedOutput on all batch results
-- **Status**: pending
+- **Status**: done
 - **Priority**: high
 - **Dependencies**: none
 - **Description**: `TestRunner.cs:241` only includes `CapturedOutput` in the `BatchResult` for timed-out batches. When `RetryOrchestrator` processes non-timed-out failed batches (line 152), `CapturedOutput` is null, so `ParseTimedOutOutput` returns empty lists and **every test in the batch is marked as failed — even ones that passed**. This causes passed tests to be unnecessarily re-run, directly undermining the tool's core purpose of only retrying failures. Fix by including `CapturedOutput: outputLines` on all batch results, not just timed-out ones. Add `RetryOrchestratorTests` that verify only genuinely failed tests from a non-timed-out failed batch are retried, and that passed tests are not re-run.
