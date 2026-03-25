@@ -19,9 +19,8 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <!-- Exclude satellite resource DLLs and PDBs from the package -->
+    <!-- Exclude satellite resource DLLs from the package -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

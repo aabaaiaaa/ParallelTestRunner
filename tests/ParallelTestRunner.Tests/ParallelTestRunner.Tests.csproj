@@ -10,7 +10,19 @@
 
   <ItemGroup>
     <PackageReference Include="MSTest" Version="3.*" />
+    <PackageReference Include="coverlet.collector" Version="6.*" />
+    <PackageReference Include="coverlet.msbuild" Version="6.*" />
+    <PackageReference Include="JunitXml.TestLogger" Version="3.*" />
   </ItemGroup>
+
+  <!-- Coverlet coverage exclusions -->
+  <PropertyGroup>
+    <!-- Exclude auto-generated regex code -->
+    <ExcludeByFile>**/obj/**/*.cs</ExcludeByFile>
+    <!-- Exclude TestLogger (runs in child process, not instrumentable) and
+         process-level code only testable via integration tests (invisible to coverlet) -->
+    <Exclude>[ParallelTestRunner.TestLogger]*,[ParallelTestRunner]ParallelTestRunner.TestRunner,[ParallelTestRunner]ParallelTestRunner.TestDiscovery,[ParallelTestRunner]Program*</Exclude>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ParallelTestRunner\ParallelTestRunner.csproj" />

@@ -308,7 +308,7 @@ public static class TestRunner
         return AppContext.BaseDirectory;
     }
 
-    private static string BuildArguments(Options options, string filterString, int batchIndex)
+    internal static string BuildArguments(Options options, string filterString, int batchIndex)
     {
         var args = new List<string>
         {
@@ -360,7 +360,7 @@ public static class TestRunner
         return string.Join(" ", args);
     }
 
-    private static string Quote(string value)
+    internal static string Quote(string value)
     {
         return value.Contains(' ') || value.Contains('"') || value.Contains('|')
             ? $"\"{value.Replace("\"", "\\\"")}\""

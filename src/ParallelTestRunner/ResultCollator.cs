@@ -82,6 +82,10 @@ public static class ResultCollator
             Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no issues detected.");
         }
 
+        var hasUnrecoverableIssues = retryResult is not null &&
+            (retryResult.HangingTests.Count > 0 ||
+             retryResult.PersistentFailures.Count > 0);
+
         if (failedBatches.Length > 0)
         {
             Console.Error.WriteLine();
@@ -92,6 +96,13 @@ public static class ResultCollator
                 Console.Error.WriteLine($"  Batch {batch.BatchIndex}: {batch.TestCount} tests, exit code {batch.ExitCode}{suffix}");
             }
 
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("Result: FAILED");
+            return 1;
+        }
+
+        if (hasUnrecoverableIssues)
+        {
             Console.Error.WriteLine();
             Console.Error.WriteLine("Result: FAILED");
             return 1;

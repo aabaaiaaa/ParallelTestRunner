@@ -114,4 +114,78 @@ public class ResultCollatorTests
         // Still fails because the batch timed out (exit code -1 != 0)
         Assert.AreEqual(1, exitCode);
     }
+
+    [TestMethod]
+    public void Collate_HangingTests_AllBatchesPassAfterRetry_Returns1()
+    {
+        // All batches marked as passing (retries recovered non-hanging tests),
+        // but confirmed hanging tests exist — should still return 1.
+        var results = new[]
+        {
+            new BatchResult(0, 10, 0),
+            new BatchResult(1, 10, 0),
+        };
+
+        var retryResult = new RetryResult(
+            HangingTests: new[] { "HangingTest" },
+            SuspectedHangingTests: Array.Empty<string>(),
+            PersistentFailures: Array.Empty<string>(),
+            RetryRoundsPerformed: 1);
+
+        var exitCode = ResultCollator.Collate(results, retryResult);
+
+        Assert.AreEqual(1, exitCode);
+    }
+
+    [TestMethod]
+    public void Collate_PersistentFailures_AllBatchesPassAfterRetry_Returns1()
+    {
+        // All batches marked as passing, but persistent failures exist — should return 1.
+        var results = new[]
+        {
+            new BatchResult(0, 10, 0),
+        };
+
+        var retryResult = new RetryResult(
+            HangingTests: Array.Empty<string>(),
+            SuspectedHangingTests: Array.Empty<string>(),
+            PersistentFailures: new[] { "FailingTest" },
+            RetryRoundsPerformed: 2);
+
+        var exitCode = ResultCollator.Collate(results, retryResult);
+
+        Assert.AreEqual(1, exitCode);
+    }
+
+    [TestMethod]
+    public void Collate_NoRetryResult_AllBatchesPass_Returns0()
+    {
+        var results = new[]
+        {
+            new BatchResult(0, 10, 0),
+        };
+
+        var exitCode = ResultCollator.Collate(results, retryResult: null);
+
+        Assert.AreEqual(0, exitCode);
+    }
+
+    [TestMethod]
+    public void Collate_RetryResult_NoIssues_AllBatchesPass_Returns0()
+    {
+        var results = new[]
+        {
+            new BatchResult(0, 10, 0),
+        };
+
+        var retryResult = new RetryResult(
+            HangingTests: Array.Empty<string>(),
+            SuspectedHangingTests: Array.Empty<string>(),
+            PersistentFailures: Array.Empty<string>(),
+            RetryRoundsPerformed: 1);
+
+        var exitCode = ResultCollator.Collate(results, retryResult);
+
+        Assert.AreEqual(0, exitCode);
+    }
 }

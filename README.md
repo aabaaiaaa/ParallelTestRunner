@@ -2,35 +2,25 @@
 
 A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel — while forcing tests within each process to run sequentially. Works with **MSTest**, **xUnit**, and **NUnit**.
 
-This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each test gets its own clean environment with no shared state, while still achieving parallelism at the process level.
+This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each batch runs in its own process with no shared state between processes, while still achieving parallelism at the process level.
+
+**Important:** The tool always passes `--no-build` to `dotnet test`. You must build your test project before running the tool.
 
 Designed for CI pipelines with built-in smart retry orchestration, hang detection, and TeamCity `##teamcity` service message forwarding.
 
 ## Installation
 
-Pack the tool first:
-
-```bash
-dotnet pack src/ParallelTestRunner
-```
-
 ### Global install
 
 ```bash
-dotnet tool install --global ParallelTestRunner --add-source src/ParallelTestRunner/nupkg
+dotnet tool install --global ParallelTestRunner
 ```
 
 ### Local tool manifest
 
 ```bash
 dotnet new tool-manifest
-dotnet tool install ParallelTestRunner --add-source src/ParallelTestRunner/nupkg
-```
-
-### From a NuGet feed (if published)
-
-```bash
-dotnet tool install --global ParallelTestRunner
+dotnet tool install ParallelTestRunner
 ```
 
 ## Usage
@@ -43,12 +33,6 @@ parallel-test-runner <path-to-test-project>
 
 # Local tool manifest
 dotnet tool run parallel-test-runner <path-to-test-project>
-```
-
-### Without installing (dev inner loop)
-
-```bash
-dotnet run --project src/ParallelTestRunner -- <path-to-test-project>
 ```
 
 ### Quick start
@@ -126,8 +110,8 @@ parallel-test-runner MyTests.csproj --auto-tune --retries 3
 # Write .trx result files
 parallel-test-runner MyTests.csproj --auto-tune --auto-retry --results-dir ./TestResults
 
-# Pass extra args through to dotnet test
-parallel-test-runner MyTests.csproj --auto-tune -- --configuration Release --no-restore
+# Pass extra args through to dotnet test (note: --no-build is always passed by the tool)
+parallel-test-runner MyTests.csproj --auto-tune -- --no-restore
 
 # Exclude a test category
 parallel-test-runner MyTests.csproj --auto-tune --auto-retry --filter-expression "TestCategory!=LongRunning"
@@ -151,7 +135,7 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 
 The tool auto-detects TeamCity via the `TEAMCITY_VERSION` environment variable. When detected, it automatically appends `--logger teamcity` so `##teamcity` service messages flow to the build log — no manual flag needed. This works alongside the tool's built-in `##ptr` logger.
 
-The tool always passes `--no-build` to `dotnet test`, so a separate build step is required.
+**Prerequisite:** Your test project must have the `TeamCity.VSTest.TestAdapter` NuGet package installed for the TeamCity logger to work. Without it, `dotnet test` will fail with "Could not find a test logger with FriendlyName 'teamcity'".
 
 ### Recommended build steps
 
@@ -164,7 +148,7 @@ dotnet build MySolution.sln
 **Step 2 — Install tool**
 
 ```bash
-dotnet tool install --global ParallelTestRunner --add-source <feed-or-path>
+dotnet tool install --global ParallelTestRunner
 ```
 
 Or restore from a local tool manifest:
@@ -183,7 +167,7 @@ parallel-test-runner MyTests.csproj --auto-tune --max-parallelism 4
 
 ```bash
 dotnet build MySolution.sln --configuration Release
-dotnet tool install --global ParallelTestRunner --add-source ./nupkg
+dotnet tool install --global ParallelTestRunner
 parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 ```
 
@@ -217,7 +201,3 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | Variable | Description |
 |---|---|
 | `TEAMCITY_VERSION` | When set, the tool automatically appends `--logger teamcity` to enable TeamCity service message output |
-| `FAIL_TESTS` | Used by `DummyTestProject` to trigger deliberate test failures for testing failure scenarios |
-| `HANG_TEST` | Used by `DummyTestProject` to trigger a 30-second blocking test for hang detection testing |
-| `FAIL_ONCE` | Used by `DummyTestProject` to trigger a transient failure (fails first run, passes on retry) |
-| `FAIL_DISPLAY_NAME_TESTS` | Used by `DummyTestProject` to trigger failure on tests with custom display names |
