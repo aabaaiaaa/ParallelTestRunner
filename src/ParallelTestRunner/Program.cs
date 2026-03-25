@@ -233,6 +233,17 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     // Step 3: Run batches in parallel
     var results = await TestRunner.RunAllAsync(batches, options, cancellationToken);
 
+    // Validate the custom ##ptr logger is loaded — without it, retry and hang detection cannot work
+    if (!TestRunner.ValidateLoggerOutput(results))
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("ERROR: The ParallelTestRunner.TestLogger was not loaded by the test host.");
+        Console.Error.WriteLine("       Test results cannot be accurately matched to FQNs for retry or hang detection.");
+        Console.Error.WriteLine("       Ensure the logger DLL is present alongside the tool and --test-adapter-path is correct.");
+        toolExitCode = 2;
+        return;
+    }
+
     // Step 3.5: Smart retry with integrated hang detection
     RetryResult? retryResult = null;
     if ((options.AutoRetry || options.Retries > 0) && results.Any(r => r.ExitCode != 0))

@@ -79,7 +79,7 @@ public static partial class TestDiscovery
         using var registration = ct.Register(() =>
         {
             try { process.Kill(entireProcessTree: true); }
-            catch { /* process may have already exited */ }
+            catch (InvalidOperationException) { /* process may have already exited */ }
         });
 
         var exitCode = await tcs.Task;
@@ -159,7 +159,7 @@ public static partial class TestDiscovery
             using var registration = ct.Register(() =>
             {
                 try { process.Kill(entireProcessTree: true); }
-                catch { /* process may have already exited */ }
+                catch (InvalidOperationException) { /* process may have already exited */ }
             });
 
             var exitCode = await tcs.Task;
@@ -187,7 +187,7 @@ public static partial class TestDiscovery
         finally
         {
             try { File.Delete(tempFile); }
-            catch { /* best effort cleanup */ }
+            catch (IOException) { /* best effort cleanup */ }
         }
     }
 

@@ -416,9 +416,9 @@ public class RetryOrchestratorTests
     }
 
     [TestMethod]
-    public void ParseTimedOutOutput_LegacyFallback_ParameterisedVariant_MatchesBaseTest()
+    public void ParseTimedOutOutput_NoFallback_DisplayNameLinesIgnored()
     {
-        // When ##ptr lines are absent, falls back to display-name parsing with StartsWith
+        // Display-name lines without ##ptr are ignored — no fallback parsing
         var output = new List<string>
         {
             "  Passed Ns.Test(1) [1s]",
@@ -427,9 +427,9 @@ public class RetryOrchestratorTests
 
         var (passed, failed, suspected) = RetryOrchestrator.ParseTimedOutOutput(output, batchTests);
 
-        CollectionAssert.AreEquivalent(new[] { "Ns.Test" }, passed);
+        Assert.AreEqual(0, passed.Count, "Display-name lines should not be parsed");
         Assert.AreEqual(0, failed.Count);
-        Assert.AreEqual("Ns.TestOther", suspected);
+        Assert.AreEqual("Ns.Test", suspected, "All tests should be unaccounted without ##ptr lines");
     }
 
     [TestMethod]
@@ -437,6 +437,7 @@ public class RetryOrchestratorTests
     {
         // The critical scenario: display name is completely different from FQN.
         // ##ptr lines contain the FQN, so matching works even when display names diverge.
+        // Display-name lines are present but ignored — only ##ptr lines are parsed.
         var output = new List<string>
         {
             "  Passed Adding two positive numbers returns correct sum [1s]",

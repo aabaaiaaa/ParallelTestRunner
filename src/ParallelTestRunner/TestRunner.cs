@@ -43,7 +43,7 @@ public static class TestRunner
                         if (!proc.HasExited)
                             proc.Kill(entireProcessTree: true);
                     }
-                    catch
+                    catch (InvalidOperationException)
                     {
                         // Process may have exited between check and kill
                     }
@@ -108,7 +108,7 @@ public static class TestRunner
                 {
                     tcs.TrySetResult(process.ExitCode);
                 }
-                catch
+                catch (InvalidOperationException)
                 {
                     tcs.TrySetResult(-1);
                 }
@@ -125,32 +125,17 @@ public static class TestRunner
                         outputLines.Add(e.Data);
                     }
 
-                    // Track individual test pass/fail for progress reporting.
-                    // Only count from ##ptr lines (custom logger with FQN) to avoid
-                    // double-counting when both ##ptr and display-name lines are present.
-                    // Falls back to display-name lines only if no ##ptr lines exist.
+                    // Track individual test pass/fail from ##ptr lines (custom logger with FQN).
+                    // The ##ptr logger is mandatory — there is no display-name fallback.
                     if (progress is not null)
                     {
                         var ptrMatch = Patterns.PtrLoggerLineRegex().Match(e.Data);
                         if (ptrMatch.Success)
                         {
-                            progress.SetPtrLoggerActive();
                             if (ptrMatch.Groups[1].Value == "Passed")
                                 progress.IncrementPassed();
                             else if (ptrMatch.Groups[1].Value == "Failed")
                                 progress.IncrementFailed();
-                        }
-                        else if (!progress.IsPtrLoggerActive)
-                        {
-                            // Fallback to display-name lines for progress if ##ptr not available
-                            var match = Patterns.TestResultLineRegex().Match(e.Data);
-                            if (match.Success)
-                            {
-                                if (match.Groups[1].Value == "Passed")
-                                    progress.IncrementPassed();
-                                else
-                                    progress.IncrementFailed();
-                            }
                         }
                     }
 
@@ -196,7 +181,7 @@ public static class TestRunner
                     if (!process.HasExited)
                         process.Kill(entireProcessTree: true);
                 }
-                catch
+                catch (InvalidOperationException)
                 {
                     // Process may have already exited
                 }
@@ -275,6 +260,43 @@ public static class TestRunner
         {
             semaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Validates that the custom ##ptr logger was loaded by checking that at least one
+    /// batch's captured output contains ##ptr lines. If tests ran but no ##ptr lines
+    /// were emitted, the logger failed to load and results cannot be trusted.
+    /// </summary>
+    /// <returns>True if the logger is working; false if tests ran without it.</returns>
+    internal static bool ValidateLoggerOutput(BatchResult[] results)
+    {
+        var ptrRegex = Patterns.PtrLoggerLineRegex();
+
+        foreach (var result in results)
+        {
+            if (result.CapturedOutput is null) continue;
+
+            // Check if this batch had any test results at all (Passed/Failed lines from VSTest)
+            var hasTestResults = false;
+            var hasPtrLines = false;
+
+            foreach (var line in result.CapturedOutput)
+            {
+                if (ptrRegex.IsMatch(line))
+                    hasPtrLines = true;
+                else if (Patterns.TestResultLineRegex().IsMatch(line))
+                    hasTestResults = true;
+
+                if (hasPtrLines) return true; // Logger is working
+            }
+
+            // If VSTest reported test results but no ##ptr lines were found, the logger isn't loaded
+            if (hasTestResults)
+                return false;
+        }
+
+        // No test results at all (e.g. all batches timed out before any test completed) — can't determine
+        return true;
     }
 
     /// <summary>
@@ -357,7 +379,6 @@ internal sealed class ProgressTracker
     private int _completedBatches;
     private int _passedTests;
     private int _failedTests;
-    private int _ptrLoggerActive;
 
     public ProgressTracker(int totalBatches, int totalTests)
     {
@@ -367,12 +388,6 @@ internal sealed class ProgressTracker
 
     public void IncrementPassed() => Interlocked.Increment(ref _passedTests);
     public void IncrementFailed() => Interlocked.Increment(ref _failedTests);
-
-    /// <summary>Marks that ##ptr lines have been seen, disabling display-name fallback counting.</summary>
-    public void SetPtrLoggerActive() => Interlocked.Exchange(ref _ptrLoggerActive, 1);
-
-    /// <summary>Returns true if ##ptr lines have been seen from any batch.</summary>
-    public bool IsPtrLoggerActive => Volatile.Read(ref _ptrLoggerActive) == 1;
 
     public void BatchCompleted(BatchResult result)
     {

@@ -299,7 +299,6 @@ public static class RetryOrchestrator
     /// <summary>
     /// Parses output from a timed-out or failed batch to identify completed tests and the suspected hanger.
     /// Uses ##ptr lines from the custom ParallelTestRunner.TestLogger for accurate FQN matching.
-    /// Falls back to display-name parsing (Passed/Failed lines) if no ##ptr lines are found.
     /// Since Workers=1 forces sequential execution, the first test not in the completed list
     /// is the one that was running when the timeout hit.
     /// </summary>
@@ -311,17 +310,14 @@ public static class RetryOrchestrator
 
         if (capturedOutput is not null)
         {
-            // Try ##ptr lines first (accurate FQN matching)
             var ptrRegex = Patterns.PtrLoggerLineRegex();
             var batchTestSet = new HashSet<string>(batchTests);
-            var foundPtrLines = false;
 
             foreach (var line in capturedOutput)
             {
                 var ptrMatch = ptrRegex.Match(line);
                 if (!ptrMatch.Success) continue;
 
-                foundPtrLines = true;
                 var status = ptrMatch.Groups[1].Value;
                 var fqn = ptrMatch.Groups[2].Value;
 
@@ -332,33 +328,6 @@ public static class RetryOrchestrator
                     completedPassed.Add(fqn);
                 else if (status == "Failed")
                     completedFailed.Add(fqn);
-            }
-
-            // Fallback: if no ##ptr lines were found, try legacy display-name parsing.
-            // This handles cases where the custom logger is unavailable.
-            if (!foundPtrLines)
-            {
-                var regex = Patterns.TestResultLineRegex();
-                foreach (var line in capturedOutput)
-                {
-                    var match = regex.Match(line);
-                    if (!match.Success) continue;
-
-                    var status = match.Groups[1].Value;
-                    var testName = match.Groups[2].Value;
-
-                    // Match against batch tests: prefer exact match, fall back to
-                    // starts-with for parameterised variants (e.g. "Ns.Test(1)" starts with FQN "Ns.Test")
-                    var matchedTest = batchTests.FirstOrDefault(t => testName == t)
-                        ?? batchTests.FirstOrDefault(t => testName.StartsWith(t + "("));
-
-                    if (matchedTest is null) continue;
-
-                    if (status == "Passed")
-                        completedPassed.Add(matchedTest);
-                    else
-                        completedFailed.Add(matchedTest);
-                }
             }
         }
 
