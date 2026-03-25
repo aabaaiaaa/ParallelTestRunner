@@ -16,14 +16,14 @@ public static partial class TestDiscovery
     /// </summary>
     /// <returns>A deduplicated list of fully-qualified test names.</returns>
     public static async Task<IReadOnlyList<string>> DiscoverAsync(
-        string projectPath, string[] extraArgs, CancellationToken ct)
+        string projectPath, string[] extraArgs, string? filterExpression, CancellationToken ct)
     {
         // Step 1: Run dotnet test --list-tests to discover the DLL path
         var dllPath = await ResolveDllPathAsync(projectPath, extraArgs, ct);
         Console.Error.WriteLine($"  Resolved test assembly: {dllPath}");
 
         // Step 2: Use dotnet vstest to get fully-qualified test names
-        var tests = await DiscoverFqnTestsAsync(dllPath, ct);
+        var tests = await DiscoverFqnTestsAsync(dllPath, filterExpression, ct);
 
         if (tests.Count == 0)
             throw new InvalidOperationException(
@@ -113,13 +113,15 @@ public static partial class TestDiscovery
     /// <c>dotnet test</c> version provides equivalent FQN discovery capability.
     /// </remarks>
     private static async Task<IReadOnlyList<string>> DiscoverFqnTestsAsync(
-        string dllPath, CancellationToken ct)
+        string dllPath, string? filterExpression, CancellationToken ct)
     {
         var tempFile = Path.GetTempFileName();
 
         try
         {
             var args = $"vstest \"{dllPath}\" --ListFullyQualifiedTests --ListTestsTargetPath:\"{tempFile}\"";
+            if (filterExpression is not null)
+                args += $" --TestCaseFilter:\"{filterExpression}\"";
 
             using var process = new Process
             {

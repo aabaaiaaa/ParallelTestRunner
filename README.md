@@ -1,8 +1,8 @@
 # Parallel Test Runner
 
-A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel — while forcing tests within each process to run sequentially.
+A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel — while forcing tests within each process to run sequentially. Works with **MSTest**, **xUnit**, and **NUnit**.
 
-This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each test gets its own clean environment with no shared state, while still achieving parallelism at the process level. Supports MSTest, xUnit, and NUnit.
+This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each test gets its own clean environment with no shared state, while still achieving parallelism at the process level.
 
 Designed for CI pipelines with built-in smart retry orchestration, hang detection, and TeamCity `##teamcity` service message forwarding.
 
@@ -51,32 +51,89 @@ dotnet tool run parallel-test-runner <path-to-test-project>
 dotnet run --project src/ParallelTestRunner -- <path-to-test-project>
 ```
 
-### Examples
+### Quick start
+
+For most projects, `--auto-tune` and `--auto-retry` are all you need. The tool will figure out batch sizes and parallelism based on your CPU and test count:
 
 ```bash
-# Run with custom batch size and parallelism
-parallel-test-runner MyTests.csproj --batch-size 10 --max-parallelism 4
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry
+```
 
-# Auto-tune batch size and parallelism based on test count and CPU cores
-parallel-test-runner MyTests.csproj --auto-tune
+If you need to override a specific setting, pass it alongside `--auto-tune` — the tool will use your value and show what it would have recommended:
 
-# Auto-tune with explicit override (shows recommendation but keeps your value)
-parallel-test-runner MyTests.csproj --auto-tune --max-parallelism 4
+```bash
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry --max-parallelism 4
+```
 
+### Integration / API tests
+
+Integration tests typically make HTTP calls or hit databases, with individual tests completing in under 30 seconds. These are well suited to high parallelism — the bottleneck is usually the backend services, not CPU.
+
+```bash
+# Let auto-tune pick batch size and parallelism (good default for most projects)
+parallel-test-runner MyIntegrationTests.csproj --auto-tune --auto-retry
+
+# If tests are fast (<5s each), the default 60s idle timeout is fine.
+# For slower API calls (10-30s), increase the timeout:
+parallel-test-runner MyIntegrationTests.csproj --auto-tune --auto-retry --idle-timeout 120
+
+# Filter to a specific test category
+parallel-test-runner MyIntegrationTests.csproj --auto-tune --auto-retry --filter-expression "TestCategory=Smoke"
+
+# Run a subset to validate the pipeline before committing to a full run
+parallel-test-runner MyIntegrationTests.csproj --auto-tune --max-tests 50 --retries 0
+```
+
+**When to override auto-tune:**
+- If your backend can only handle a limited number of concurrent connections, cap parallelism: `--max-parallelism 4`
+- If tests share a database and you see transient conflicts, reduce batch size to spread load: `--batch-size 10`
+
+### End-to-end / UI / browser tests
+
+UI tests launch browsers and interact with web pages, so each test takes significantly longer (1-10 minutes) and consumes more resources. Each parallel process opens its own browser instance, so parallelism should be lower than for API tests.
+
+```bash
+# Start with auto-tune but cap parallelism to avoid overwhelming the machine.
+# 3-5 parallel browsers is a good starting point for most CI agents:
+parallel-test-runner MyUITests.csproj --auto-tune --auto-retry --max-parallelism 3 --idle-timeout 600
+
+# For very slow UI tests (multi-step workflows), increase the idle timeout further.
+# The timeout resets on every line of test output, so a test actively producing
+# SpecFlow step output won't be killed — only truly hanging tests:
+parallel-test-runner MyUITests.csproj --auto-tune --auto-retry --max-parallelism 3 --idle-timeout 900
+
+# Filter to a specific category of UI tests
+parallel-test-runner MyUITests.csproj --auto-tune --auto-retry --max-parallelism 3 --idle-timeout 600 --filter-expression "TestCategory=WebCoreTest"
+
+# Run a small batch first to validate the browser setup works with parallelism
+parallel-test-runner MyUITests.csproj --max-tests 5 --max-parallelism 2 --batch-size 1 --retries 0 --idle-timeout 600
+```
+
+**When to override auto-tune:**
+- **Always set `--max-parallelism`** — auto-tune doesn't know tests launch browsers, so it will over-allocate. Start with 3-5 and adjust based on your CI agent's RAM and CPU.
+- **Always increase `--idle-timeout`** — the default 60s is too short for UI tests. Use 600s (10 minutes) as a baseline; increase if tests involve long page loads or complex workflows.
+- If tests share a browser profile or singleton resource, ensure each process gets its own isolated instance (e.g. unique Playwright user data directories). The tool runs separate `dotnet test` processes, but the test project must support multiple instances running simultaneously.
+
+### Other examples
+
+```bash
 # Run a subset of tests
 parallel-test-runner MyTests.csproj --skip-tests 100 --max-tests 50
 
-# Set idle timeout and retry policy
-parallel-test-runner MyTests.csproj --idle-timeout 30 --retries 3
-
-# Keep retrying as long as at least one batch recovers per round
-parallel-test-runner MyTests.csproj --auto-retry
+# Fixed retry count instead of auto-retry
+parallel-test-runner MyTests.csproj --auto-tune --retries 3
 
 # Write .trx result files
-parallel-test-runner MyTests.csproj --results-dir ./TestResults
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry --results-dir ./TestResults
 
 # Pass extra args through to dotnet test
-parallel-test-runner MyTests.csproj -- --configuration Release --no-restore
+parallel-test-runner MyTests.csproj --auto-tune -- --configuration Release --no-restore
+
+# Exclude a test category
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry --filter-expression "TestCategory!=LongRunning"
+
+# Combine category filter with other options
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry --filter-expression "TestCategory=Smoke&Priority=1"
 ```
 
 ## How It Works
@@ -85,7 +142,7 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 
 - **Discovery**: Two-step process — first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path, then runs `dotnet vstest --ListFullyQualifiedTests` to extract fully-qualified test names. Using FQNs ensures exact matching during filtering and naturally deduplicates parameterised test variants.
 - **Batching**: Splits tests into chunks by batch size. Any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds 7000 characters is automatically sub-split.
-- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially (`MSTest.Parallelize.Workers=1`) — parallelism comes from running multiple isolated processes, not in-process test parallelisation. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
+- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially — parallelism comes from running multiple isolated processes, not in-process test parallelisation. Sequential execution is enforced for all three supported frameworks (MSTest, xUnit, and NUnit) via their respective runsettings properties. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
 - **Custom test logger**: A built-in VSTest logger (`ParallelTestRunner.TestLogger`) emits structured `##ptr` lines to stdout in real-time as each test completes. Each line contains both the fully-qualified name (FQN) and display name, enabling accurate matching even when test frameworks use human-readable display names that differ from the FQN used for filtering. The logger is automatically registered via `--test-adapter-path` and `--logger ParallelTestRunner` on every `dotnet test` invocation.
 - **Smart retry orchestration**: When a batch times out (no output for `--idle-timeout` seconds), its `##ptr` output is parsed to identify which tests completed (by FQN) and which test was likely hanging. The suspected hanger is set aside; remaining unrun and failed tests are retried immediately at full parallelism. After retries, suspected hangers are tested individually — if they time out again solo, they're confirmed as hanging and permanently excluded. Tests that pass solo are marked as resolved and never retried again. Only failed tests within a batch are retried — passing tests are never re-run, thanks to exact FQN matching from the custom logger. With `--auto-retry`, retries continue as long as at least one batch recovers per round — useful for flaky tests caused by external factors.
 - **Cancellation**: Ctrl+C propagates through all layers, stopping spawned process trees gracefully.
@@ -143,6 +200,7 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `--idle-timeout` | int | `60` | Kill a batch if no output is received for this many seconds (0 = no timeout) |
 | `--retries` | int | `2` | Number of times to retry failed batches (0 = no retries) |
 | `--auto-retry` | bool | `false` | Keep retrying failed batches as long as at least one recovers per round (overrides `--retries`) |
+| `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`) |
 | `--results-dir` | string | *(none)* | Directory for `.trx` result files |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 

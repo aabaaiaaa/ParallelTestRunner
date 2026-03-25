@@ -93,6 +93,11 @@ var autoRetryOption = new Option<bool>("--auto-retry")
     Description = "Keep retrying failed batches as long as at least one recovers per round (overrides --retries)"
 };
 
+var filterExpressionOption = new Option<string?>("--filter-expression")
+{
+    Description = "VSTest filter expression applied during discovery (e.g. \"TestCategory=Smoke\", \"TestCategory!=LongRunning\")"
+};
+
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
 {
     projectArg,
@@ -105,6 +110,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     retriesOption,
     autoTuneOption,
     autoRetryOption,
+    filterExpressionOption,
 };
 
 // Treat unmatched tokens as extra dotnet test args (passed after --)
@@ -133,6 +139,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var retries = parseResult.GetValue(retriesOption);
     var autoTune = parseResult.GetValue(autoTuneOption);
     var autoRetry = parseResult.GetValue(autoRetryOption);
+    var filterExpression = parseResult.GetValue(filterExpressionOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
     // Create a timestamped subfolder for results so runs don't collide
@@ -151,6 +158,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         AutoRetry: autoRetry,
         ExtraDotnetTestArgs: extraArgs,
         ResultsDirectory: resultsDir,
+        FilterExpression: filterExpression,
         IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
 
     PrintBanner(options);
@@ -159,7 +167,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     IReadOnlyList<string> tests;
     try
     {
-        tests = await TestDiscovery.DiscoverAsync(options.ProjectPath, options.ExtraDotnetTestArgs, cancellationToken);
+        tests = await TestDiscovery.DiscoverAsync(options.ProjectPath, options.ExtraDotnetTestArgs, options.FilterExpression, cancellationToken);
     }
     catch (Exception ex)
     {
@@ -259,6 +267,8 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(options.AutoRetry
         ? "  Auto-retry: enabled"
         : $"  Retries: {options.Retries}");
+    if (options.FilterExpression is not null)
+        Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
     if (options.ResultsDirectory is not null)
         Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();
