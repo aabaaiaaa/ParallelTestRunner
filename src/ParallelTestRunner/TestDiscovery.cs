@@ -56,6 +56,7 @@ public static partial class TestDiscovery
         };
 
         var stdoutLines = new ConcurrentQueue<string>();
+        var stderrLines = new ConcurrentQueue<string>();
         var tcs = new TaskCompletionSource<int>();
 
         process.OutputDataReceived += (_, e) =>
@@ -67,7 +68,10 @@ public static partial class TestDiscovery
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is not null)
+            {
+                stderrLines.Enqueue(e.Data);
                 Console.Error.WriteLine(e.Data);
+            }
         };
 
         process.Exited += (_, _) => tcs.TrySetResult(process.ExitCode);
@@ -86,8 +90,11 @@ public static partial class TestDiscovery
         ct.ThrowIfCancellationRequested();
 
         if (exitCode != 0)
+        {
+            var stderr = string.Join(Environment.NewLine, stderrLines);
             throw new InvalidOperationException(
-                $"dotnet test --list-tests exited with code {exitCode}.");
+                $"dotnet test --list-tests exited with code {exitCode}.{(stderr.Length > 0 ? $"\n{stderr}" : "")}");
+        }
 
         // Parse DLL path from "Test run for <path>.dll (...)" line
         var regex = DllPathRegex();

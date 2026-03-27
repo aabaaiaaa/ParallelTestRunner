@@ -38,6 +38,15 @@ public class IntegrationTests
     }
 
     [TestMethod]
+    public void NonexistentProject_ExitCode2WithErrorMessage()
+    {
+        var result = RunTool("\"C:/nonexistent/Fake.csproj\" --retries 0");
+
+        Assert.AreEqual(2, result.ExitCode, $"Expected exit code 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Project file not found");
+    }
+
+    [TestMethod]
     public void Discovery_FindsAllTests()
     {
         var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-tests 10 --max-parallelism 8 --retries 0");
@@ -293,6 +302,37 @@ public class IntegrationTests
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         // 70 tests total (66 original + 4 display name tests)
         StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+    }
+
+    [TestMethod]
+    public void FilterExpression_FiltersTestsAtDiscovery()
+    {
+        // Filter to only Arithmetic namespace tests — should discover fewer than the full 70
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --filter-expression \"FullyQualifiedName~Arithmetic\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Discovered 9 tests");
+    }
+
+    [TestMethod]
+    public void FilterExpression_WithExclusion_FiltersCorrectly()
+    {
+        // Exclude Arithmetic tests — should discover 70 - 9 = 61 tests
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --filter-expression \"FullyQualifiedName!~Arithmetic\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Discovered 61 tests");
+    }
+
+    [TestMethod]
+    public void FilterExpression_WithAndOperator_CombinesFilters()
+    {
+        // Filter to Arithmetic AND exclude parameterized — should discover base methods only
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --filter-expression \"FullyQualifiedName~Arithmetic&FullyQualifiedName!~Parameterized\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        // 9 Arithmetic tests minus 2 parameterized = 7
+        StringAssert.Contains(result.Stderr, "Discovered 7 tests");
     }
 
     [TestMethod]

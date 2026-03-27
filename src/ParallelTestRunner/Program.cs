@@ -163,6 +163,14 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 
     PrintBanner(options);
 
+    // Validate project path exists
+    if (!File.Exists(options.ProjectPath))
+    {
+        Console.Error.WriteLine($"ERROR: Project file not found: {options.ProjectPath}");
+        toolExitCode = 2;
+        return;
+    }
+
     // Step 1: Discover tests
     IReadOnlyList<string> tests;
     try
