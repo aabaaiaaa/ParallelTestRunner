@@ -82,6 +82,29 @@ public static class ResultCollator
             Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no issues detected.");
         }
 
+        // Emit TeamCity service messages for hanging/suspected tests so they appear
+        // as skipped in the test report, keeping the total count accurate.
+        if (Environment.GetEnvironmentVariable("TEAMCITY_VERSION") is not null && retryResult is not null)
+        {
+            foreach (var test in retryResult.HangingTests)
+            {
+                var escapedName = TeamCityEscape(test);
+                var message = TeamCityEscape("Confirmed hanging test — killed after idle timeout");
+                Console.WriteLine($"##teamcity[testStarted name='{escapedName}']");
+                Console.WriteLine($"##teamcity[testIgnored name='{escapedName}' message='{message}']");
+                Console.WriteLine($"##teamcity[testFinished name='{escapedName}']");
+            }
+
+            foreach (var test in retryResult.SuspectedHangingTests)
+            {
+                var escapedName = TeamCityEscape(test);
+                var message = TeamCityEscape("Suspected hanging test — retry cap reached before solo testing");
+                Console.WriteLine($"##teamcity[testStarted name='{escapedName}']");
+                Console.WriteLine($"##teamcity[testIgnored name='{escapedName}' message='{message}']");
+                Console.WriteLine($"##teamcity[testFinished name='{escapedName}']");
+            }
+        }
+
         var hasUnrecoverableIssues = retryResult is not null &&
             (retryResult.HangingTests.Count > 0 ||
              retryResult.PersistentFailures.Count > 0);
@@ -111,5 +134,19 @@ public static class ResultCollator
         Console.Error.WriteLine();
         Console.Error.WriteLine("Result: PASSED");
         return 0;
+    }
+
+    /// <summary>
+    /// Escapes special characters for TeamCity service message values.
+    /// </summary>
+    internal static string TeamCityEscape(string value)
+    {
+        return value
+            .Replace("|", "||")
+            .Replace("'", "|'")
+            .Replace("[", "|[")
+            .Replace("]", "|]")
+            .Replace("\n", "|n")
+            .Replace("\r", "|r");
     }
 }

@@ -188,4 +188,20 @@ public class ResultCollatorTests
 
         Assert.AreEqual(0, exitCode);
     }
+
+    [TestMethod]
+    public void TeamCityEscape_EscapesSpecialCharacters()
+    {
+        Assert.AreEqual("test||value", ResultCollator.TeamCityEscape("test|value"));
+        Assert.AreEqual("test|'value", ResultCollator.TeamCityEscape("test'value"));
+        Assert.AreEqual("test|[value|]", ResultCollator.TeamCityEscape("test[value]"));
+        Assert.AreEqual("line1|nline2", ResultCollator.TeamCityEscape("line1\nline2"));
+        Assert.AreEqual("line1|rline2", ResultCollator.TeamCityEscape("line1\rline2"));
+    }
+
+    [TestMethod]
+    public void TeamCityEscape_NoSpecialChars_ReturnsUnchanged()
+    {
+        Assert.AreEqual("Ns.Class.Method", ResultCollator.TeamCityEscape("Ns.Class.Method"));
+    }
 }
