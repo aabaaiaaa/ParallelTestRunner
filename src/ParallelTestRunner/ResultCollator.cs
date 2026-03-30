@@ -45,6 +45,8 @@ public static class ResultCollator
         {
             Console.Error.WriteLine();
             Console.Error.WriteLine("========== Hanging Tests ==========");
+            if (retryResult.RescueRoundsPerformed > 0)
+                Console.Error.WriteLine($"  Rescue rounds performed: {retryResult.RescueRoundsPerformed}");
             Console.Error.WriteLine($"  Retry rounds performed: {retryResult.RetryRoundsPerformed}");
             Console.Error.WriteLine($"  Confirmed hanging tests: {retryResult.HangingTests.Count}");
             foreach (var test in retryResult.HangingTests)
@@ -75,11 +77,16 @@ public static class ResultCollator
             }
         }
 
-        if (retryResult is not null && retryResult.HangingTests.Count == 0 && retryResult.SuspectedHangingTests.Count == 0
-            && retryResult.PersistentFailures.Count == 0 && retryResult.RetryRoundsPerformed > 0)
+        if (retryResult is { SlowTests.Count: > 0 })
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine($"  Retries completed ({retryResult.RetryRoundsPerformed} round(s)) — no issues detected.");
+            Console.Error.WriteLine("========== Slow Tests ==========");
+            Console.Error.WriteLine($"  These tests were suspected of hanging but passed with an extended timeout.");
+            Console.Error.WriteLine($"  Consider increasing --idle-timeout to avoid false hang detection:");
+            foreach (var test in retryResult.SlowTests)
+            {
+                Console.Error.WriteLine($"    - {test}");
+            }
         }
 
         // Emit TeamCity service messages for hanging/suspected tests so they appear

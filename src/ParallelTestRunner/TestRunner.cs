@@ -127,21 +127,29 @@ public static class TestRunner
 
                     // Track individual test pass/fail from ##ptr lines (custom logger with FQN).
                     // The ##ptr logger is mandatory — there is no display-name fallback.
-                    if (progress is not null)
+                    var ptrMatch = Patterns.PtrLoggerLineRegex().Match(e.Data);
+                    if (ptrMatch.Success)
                     {
-                        var ptrMatch = Patterns.PtrLoggerLineRegex().Match(e.Data);
-                        if (ptrMatch.Success)
+                        if (progress is not null)
                         {
                             if (ptrMatch.Groups[1].Value == "Passed")
                                 progress.IncrementPassed();
                             else if (ptrMatch.Groups[1].Value == "Failed")
                                 progress.IncrementFailed();
                         }
-                    }
 
-                    lock (ConsoleLock)
+                        // Only ##ptr lines and ##teamcity lines are printed to console
+                        lock (ConsoleLock)
+                        {
+                            Console.WriteLine(e.Data);
+                        }
+                    }
+                    else if (e.Data.StartsWith("##teamcity["))
                     {
-                        Console.WriteLine(e.Data);
+                        lock (ConsoleLock)
+                        {
+                            Console.WriteLine(e.Data);
+                        }
                     }
                 }
             };
@@ -155,11 +163,6 @@ public static class TestRunner
                     lock (outputLock)
                     {
                         outputLines.Add($"[stderr] {e.Data}");
-                    }
-
-                    lock (ConsoleLock)
-                    {
-                        Console.Error.WriteLine(e.Data);
                     }
                 }
             };
@@ -334,14 +337,11 @@ public static class TestRunner
             args.Add("teamcity");
         }
 
-        // TRX logging if results directory specified
-        if (options.ResultsDirectory is not null)
-        {
-            args.Add("--logger");
-            args.Add(Quote($"trx;LogFileName=batch_{batchIndex}.trx"));
-            args.Add("--results-directory");
-            args.Add(Quote(options.ResultsDirectory));
-        }
+        // TRX logging — always enabled for failure diagnostics
+        args.Add("--logger");
+        args.Add(Quote($"trx;LogFileName=batch_{batchIndex}.trx"));
+        args.Add("--results-directory");
+        args.Add(Quote(options.ResultsDirectory!));
 
         // Append any extra dotnet test args
         foreach (var extra in options.ExtraDotnetTestArgs)
@@ -349,13 +349,12 @@ public static class TestRunner
             args.Add(extra);
         }
 
-        // Force sequential execution within each batch — parallelism is managed
-        // at the process level by this tool, not within dotnet test.
+        // Control in-process parallelism within each batch.
         // Each framework ignores settings it doesn't recognise, so all three are safe to include.
         args.Add("--");
-        args.Add("MSTest.Parallelize.Workers=1");
-        args.Add("xUnit.MaxParallelThreads=1");
-        args.Add("NUnit.NumberOfTestWorkers=1");
+        args.Add($"MSTest.Parallelize.Workers={options.Workers}");
+        args.Add($"xUnit.MaxParallelThreads={options.Workers}");
+        args.Add($"NUnit.NumberOfTestWorkers={options.Workers}");
 
         return string.Join(" ", args);
     }

@@ -30,6 +30,18 @@ maxParallelismOption.Validators.Add(result =>
         result.AddError("--max-parallelism must be at least 1.");
 });
 
+var workersOption = new Option<int>("--workers")
+{
+    Description = "Number of test workers (in-process parallelism) per dotnet test process",
+    DefaultValueFactory = _ => 4
+};
+workersOption.Validators.Add(result =>
+{
+    var value = result.GetValue(workersOption);
+    if (value < 1)
+        result.AddError("--workers must be at least 1.");
+});
+
 var maxTestsOption = new Option<int>("--max-tests")
 {
     Description = "Maximum number of tests to run (0 = all)",
@@ -56,7 +68,7 @@ skipTestsOption.Validators.Add(result =>
 
 var resultsDirOption = new Option<string?>("--results-dir")
 {
-    Description = "Directory for .trx result files"
+    Description = "Directory for .trx result files (default: auto-generated temp directory)"
 };
 
 var idleTimeoutOption = new Option<int>("--idle-timeout")
@@ -103,6 +115,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     projectArg,
     batchSizeOption,
     maxParallelismOption,
+    workersOption,
     maxTestsOption,
     skipTestsOption,
     resultsDirOption,
@@ -132,6 +145,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var project = parseResult.GetValue(projectArg);
     var batchSize = parseResult.GetValue(batchSizeOption);
     var maxParallelism = parseResult.GetValue(maxParallelismOption);
+    var workers = parseResult.GetValue(workersOption);
     var maxTests = parseResult.GetValue(maxTestsOption);
     var skipTests = parseResult.GetValue(skipTestsOption);
     var resultsDir = parseResult.GetValue(resultsDirOption);
@@ -142,17 +156,16 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var filterExpression = parseResult.GetValue(filterExpressionOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
-    // Create a timestamped subfolder for results so runs don't collide
-    if (resultsDir is not null)
-    {
-        resultsDir = Path.Combine(resultsDir, $"run_{DateTime.UtcNow:yyyyMMddTHHmmss}");
-        Directory.CreateDirectory(resultsDir);
-    }
+    // Always create a results directory for TRX output — use temp if not specified
+    resultsDir ??= Path.Combine(Path.GetTempPath(), "ParallelTestRunner");
+    resultsDir = Path.Combine(resultsDir, $"run_{DateTime.UtcNow:yyyyMMddTHHmmss}");
+    Directory.CreateDirectory(resultsDir);
 
     var options = new Options(
         ProjectPath: project!,
         BatchSize: batchSize,
         MaxParallelism: maxParallelism,
+        Workers: workers,
         MaxTests: maxTests,
         Retries: retries,
         AutoRetry: autoRetry,
@@ -261,6 +274,9 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 
     // Step 4: Collate results
     toolExitCode = ResultCollator.Collate(results, retryResult);
+
+    // Always show the TRX results directory
+    Console.Error.WriteLine($"  TRX results: {resultsDir}");
 });
 
 var config = new CommandLineConfiguration(rootCommand);
@@ -282,13 +298,13 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(banner);
     Console.Error.WriteLine($"  Detected cores: {Environment.ProcessorCount}");
     Console.Error.WriteLine($"  Chosen parallelism: {options.MaxParallelism}");
+    Console.Error.WriteLine($"  Workers per process: {options.Workers}");
     Console.Error.WriteLine($"  Idle timeout: {(options.IdleTimeout > TimeSpan.Zero ? $"{options.IdleTimeout.TotalSeconds:F0}s" : "none")}");
     Console.Error.WriteLine(options.AutoRetry
         ? "  Auto-retry: enabled"
         : $"  Retries: {options.Retries}");
     if (options.FilterExpression is not null)
         Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
-    if (options.ResultsDirectory is not null)
-        Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
+    Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();
 }

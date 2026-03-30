@@ -98,9 +98,9 @@ public class IntegrationTests
     public void SequentialExecution_ForcesWorkersToOne()
     {
         // DummyTestProject has [assembly: Parallelize(Workers = 4)] and SequentialCheck tests
-        // that fail if >1 test runs concurrently. The tool should override this with Workers=1.
+        // that fail if >1 test runs concurrently. Using --workers 1 to force sequential execution.
         // Must use --max-parallelism 1 here so all sequential tests run in the same batch/process.
-        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --idle-timeout 10 --retries 0");
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --workers 1 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode,
             $"Expected exit code 0 — SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");
@@ -338,10 +338,10 @@ public class IntegrationTests
     [TestMethod]
     public void XUnit_SequentialExecution_ForcesWorkersToOne()
     {
-        // xUnit runs test collections in parallel by default. The tool should force
+        // xUnit runs test collections in parallel by default. Using --workers 1 to force
         // sequential execution via xUnit.MaxParallelThreads=1.
         // Must use --max-parallelism 1 so all sequential tests run in the same batch/process.
-        var result = RunTool($"\"{_dummyXUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --idle-timeout 10 --retries 0");
+        var result = RunTool($"\"{_dummyXUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --workers 1 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode,
             $"Expected exit code 0 — xUnit SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");
@@ -351,9 +351,9 @@ public class IntegrationTests
     public void NUnit_SequentialExecution_ForcesWorkersToOne()
     {
         // NUnit has [assembly: Parallelizable(ParallelScope.All)] enabling parallel execution.
-        // The tool should force sequential execution via NUnit.NumberOfTestWorkers=1.
+        // Using --workers 1 to force sequential execution via NUnit.NumberOfTestWorkers=1.
         // Must use --max-parallelism 1 so all sequential tests run in the same batch/process.
-        var result = RunTool($"\"{_dummyNUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --idle-timeout 10 --retries 0");
+        var result = RunTool($"\"{_dummyNUnitProjectPath}\" --batch-size 100 --max-parallelism 1 --workers 1 --idle-timeout 10 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode,
             $"Expected exit code 0 — NUnit SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");

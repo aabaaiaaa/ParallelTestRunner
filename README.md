@@ -1,8 +1,8 @@
 # Parallel Test Runner
 
-A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel — while forcing tests within each process to run sequentially. Works with **MSTest**, **xUnit**, and **NUnit**.
+A .NET dotnet tool that runs test suites faster by splitting them across multiple isolated `dotnet test` processes running in parallel, with configurable in-process parallelism within each process. Works with **MSTest**, **xUnit**, and **NUnit**.
 
-This solves a common problem with in-process parallel test execution: tests that share resources (databases, files, service connections, static state) interfere with each other when run concurrently in the same process. By isolating batches into separate processes, each batch runs in its own process with no shared state between processes, while still achieving parallelism at the process level.
+This solves a common problem with test execution: by distributing tests across multiple processes, each with their own configurable worker count (`--workers`, default 4), you get both process-level isolation and in-process parallelism. For suites with shared-state contention, use `--workers 1` to force sequential execution within each process while still achieving parallelism at the process level.
 
 **Important:** The tool always passes `--no-build` to `dotnet test`. You must build your test project before running the tool.
 
@@ -107,7 +107,10 @@ parallel-test-runner MyTests.csproj --skip-tests 100 --max-tests 50
 # Fixed retry count instead of auto-retry
 parallel-test-runner MyTests.csproj --auto-tune --retries 3
 
-# Write .trx result files
+# Force sequential execution within each process (for shared-state contention)
+parallel-test-runner MyTests.csproj --auto-tune --auto-retry --workers 1
+
+# Write .trx result files to a specific directory (TRX is always generated; this overrides the default temp location)
 parallel-test-runner MyTests.csproj --auto-tune --auto-retry --results-dir ./TestResults
 
 # Pass extra args through to dotnet test (note: --no-build is always passed by the tool)
@@ -126,9 +129,9 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 
 - **Discovery**: Two-step process — first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path, then runs `dotnet vstest --ListFullyQualifiedTests` to extract fully-qualified test names. Using FQNs ensures exact matching during filtering and naturally deduplicates parameterised test variants.
 - **Batching**: Splits tests into chunks by batch size. Any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds 7000 characters is automatically sub-split.
-- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. Tests within each batch are forced to run sequentially — parallelism comes from running multiple isolated processes, not in-process test parallelisation. Sequential execution is enforced for all three supported frameworks (MSTest, xUnit, and NUnit) via their respective runsettings properties. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
+- **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. In-process parallelism is controlled by `--workers` (default 4), which sets the worker count for MSTest, xUnit, and NUnit via their respective runsettings properties. Use `--workers 1` to force sequential execution within each process for suites with shared-state contention. Console output is kept quiet — only `##ptr` test result lines and `##teamcity` service messages are printed. All other process output (build messages, step details, etc.) is captured internally for retry/hang detection but not displayed. TRX result files are always generated for failure diagnostics. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
 - **Custom test logger**: A built-in VSTest logger (`ParallelTestRunner.TestLogger`) emits structured `##ptr` lines to stdout in real-time as each test completes. Each line contains both the fully-qualified name (FQN) and display name, enabling accurate matching even when test frameworks use human-readable display names that differ from the FQN used for filtering. The logger is automatically registered via `--test-adapter-path` and `--logger ParallelTestRunner` on every `dotnet test` invocation.
-- **Smart retry orchestration**: When a batch times out (no output for `--idle-timeout` seconds), its `##ptr` output is parsed to identify which tests completed (by FQN) and which test was likely hanging. The suspected hanger is set aside; remaining unrun and failed tests are retried immediately at full parallelism. After retries, suspected hangers are tested individually — if they time out again solo, they're confirmed as hanging and permanently excluded. Tests that pass solo are marked as resolved and never retried again. Only failed tests within a batch are retried — passing tests are never re-run, thanks to exact FQN matching from the custom logger. With `--auto-retry`, retries continue as long as at least one batch recovers per round — useful for flaky tests caused by external factors.
+- **Smart retry orchestration**: The retry orchestrator runs a unified work loop that combines rescue runs, solo hanger testing, and failure retries into each round to maximise parallel slot utilisation. After the initial run, tests are classified as: passed, failed, suspected hangers, or never-ran (tests behind a hanger in a timed-out batch). Each round builds a combined work pool from all pending work types and executes them together, ensuring all parallel slots stay busy. Tests that never ran get rescue runs (not counted as retries) — every test is guaranteed at least one confirmed outcome. Suspected hangers are tested individually with an extended timeout (3x the normal idle timeout) to distinguish truly hanging tests from slow ones. Tests that pass with the extended timeout are reported as "slow tests" with a suggestion to increase `--idle-timeout`. Per-test retry counts ensure each failed test gets up to `--retries` actual retry attempts. With `--auto-retry`, retries continue as long as at least one test recovers per round — useful for flaky tests caused by external factors.
 - **Cancellation**: Ctrl+C propagates through all layers, stopping spawned process trees gracefully.
 
 ## TeamCity Build Step Configuration
@@ -178,14 +181,15 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `<project>` | string | *(required)* | Path to the test project or solution |
 | `--batch-size` | int | `50` | Number of tests per batch (minimum 1) |
 | `--max-parallelism` | int | `CPU cores / 2` | Maximum concurrent `dotnet test` processes (minimum 1) |
+| `--workers` | int | `4` | Number of test workers (in-process parallelism) per `dotnet test` process (minimum 1). Use `1` for suites with shared-state contention. |
 | `--max-tests` | int | `0` | Maximum number of tests to run (0 = all) |
 | `--skip-tests` | int | `0` | Number of tests to skip from the start of the discovered list |
 | `--auto-tune` | bool | `false` | Auto-tune batch size and parallelism based on test count and CPU cores |
-| `--idle-timeout` | int | `60` | Kill a batch if no output is received for this many seconds (0 = no timeout) |
-| `--retries` | int | `2` | Number of times to retry failed batches (0 = no retries) |
-| `--auto-retry` | bool | `false` | Keep retrying failed batches as long as at least one recovers per round (overrides `--retries`) |
+| `--idle-timeout` | int | `60` | Kill a batch if no output is received for this many seconds (0 = no timeout). Suspected hangers are retested solo with 3x this timeout. |
+| `--retries` | int | `2` | Number of times to retry each failed test (0 = no retries). Rescue runs for tests that never completed don't count toward this limit. |
+| `--auto-retry` | bool | `false` | Keep retrying failed tests as long as at least one recovers per round (overrides `--retries`) |
 | `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`) |
-| `--results-dir` | string | *(none)* | Directory for `.trx` result files |
+| `--results-dir` | string | *auto temp dir* | Directory for `.trx` result files. TRX is always generated; defaults to `%TEMP%/ParallelTestRunner/run_<timestamp>` if not specified. |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 
 ## Exit Codes

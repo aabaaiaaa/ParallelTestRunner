@@ -8,6 +8,7 @@ public class TestRunnerUnitTests
     private static readonly Options DefaultOptions = new(
         ProjectPath: "MyTests.csproj",
         BatchSize: 50,
+        ResultsDirectory: "C:/default-results",
         IdleTimeout: TimeSpan.FromSeconds(60));
 
     [TestMethod]
@@ -34,33 +35,43 @@ public class TestRunnerUnitTests
     }
 
     [TestMethod]
-    public void BuildArguments_IncludesSequentialExecutionForAllFrameworks()
+    public void BuildArguments_IncludesWorkersForAllFrameworks()
     {
         var args = TestRunner.BuildArguments(DefaultOptions, "FullyQualifiedName=Test1", 0);
 
-        Assert.IsTrue(args.Contains("MSTest.Parallelize.Workers=1"));
-        Assert.IsTrue(args.Contains("xUnit.MaxParallelThreads=1"));
-        Assert.IsTrue(args.Contains("NUnit.NumberOfTestWorkers=1"));
+        Assert.IsTrue(args.Contains("MSTest.Parallelize.Workers=4"));
+        Assert.IsTrue(args.Contains("xUnit.MaxParallelThreads=4"));
+        Assert.IsTrue(args.Contains("NUnit.NumberOfTestWorkers=4"));
     }
 
     [TestMethod]
-    public void BuildArguments_IncludesTrxLogger_WhenResultsDirSpecified()
+    public void BuildArguments_CustomWorkers_UsesSpecifiedValue()
     {
-        var options = DefaultOptions with { ResultsDirectory = "C:/results" };
-        var args = TestRunner.BuildArguments(options, "FullyQualifiedName=Test1", 3);
+        var options = DefaultOptions with { Workers = 2 };
+        var args = TestRunner.BuildArguments(options, "FullyQualifiedName=Test1", 0);
+
+        Assert.IsTrue(args.Contains("MSTest.Parallelize.Workers=2"));
+        Assert.IsTrue(args.Contains("xUnit.MaxParallelThreads=2"));
+        Assert.IsTrue(args.Contains("NUnit.NumberOfTestWorkers=2"));
+    }
+
+    [TestMethod]
+    public void BuildArguments_AlwaysIncludesTrxLogger()
+    {
+        var args = TestRunner.BuildArguments(DefaultOptions, "FullyQualifiedName=Test1", 3);
 
         Assert.IsTrue(args.Contains("trx;LogFileName=batch_3.trx"));
         Assert.IsTrue(args.Contains("--results-directory"));
-        Assert.IsTrue(args.Contains("C:/results"));
+        Assert.IsTrue(args.Contains("C:/default-results"));
     }
 
     [TestMethod]
-    public void BuildArguments_NoTrxLogger_WhenResultsDirNull()
+    public void BuildArguments_IncludesCustomResultsDir()
     {
-        var args = TestRunner.BuildArguments(DefaultOptions, "FullyQualifiedName=Test1", 0);
+        var options = DefaultOptions with { ResultsDirectory = "C:/custom-results" };
+        var args = TestRunner.BuildArguments(options, "FullyQualifiedName=Test1", 0);
 
-        Assert.IsFalse(args.Contains("trx"));
-        Assert.IsFalse(args.Contains("--results-directory"));
+        Assert.IsTrue(args.Contains("C:/custom-results"));
     }
 
     [TestMethod]

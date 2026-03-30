@@ -65,9 +65,11 @@ public class RetryOrchestratorTests
     }
 
     [TestMethod]
-    public async Task TimedOutBatch_ExtractsSuspectedHanger_RetriesRest()
+    public async Task TimedOutBatch_ExtractsSuspectedHanger_RescuesRest()
     {
-        // Batch with 4 tests, times out. Output shows TestA passed, TestB is the hanger.
+        // Batch with 4 tests, times out. Output shows TestA passed, TestB is the suspected hanger.
+        // TestC and TestD never ran. In the unified round, TestC+TestD get rescued and TestB
+        // gets tested solo — all in one runAll call.
         var capturedOutput = new List<string>
         {
             "##ptr[Passed|FQN=TestA|Name=Test A Display]",
@@ -81,43 +83,31 @@ public class RetryOrchestratorTests
             new[] { "TestA", "TestB", "TestC", "TestD" },
         };
 
-        var retryBatchTests = new List<List<string>>();
-        var hangerBatchTests = new List<List<string>>();
-        var callNum = 0;
+        var allBatchTests = new List<List<string>>();
 
         var result = await RetryOrchestrator.RunAsync(
             results, batches, DefaultOptions with { Retries = 1 },
-            (retryBatches, opts, ct) =>
+            (runBatches, opts, ct) =>
             {
-                callNum++;
-                if (callNum == 1)
-                {
-                    // First call: retry pool (TestC, TestD — not TestB which is suspected)
-                    foreach (var b in retryBatches)
-                        retryBatchTests.Add(b.ToList());
-                    return Task.FromResult(retryBatches.Select((b, i) =>
-                        new BatchResult(i, b.Count, 0)).ToArray());
-                }
-                else
-                {
-                    // Second call: solo hanger test (TestB)
-                    foreach (var b in retryBatches)
-                        hangerBatchTests.Add(b.ToList());
-                    // TestB times out solo → confirmed hanger
-                    return Task.FromResult(retryBatches.Select((b, i) =>
-                        new BatchResult(i, b.Count, -1, TimedOut: true)).ToArray());
-                }
+                foreach (var b in runBatches)
+                    allBatchTests.Add(b.ToList());
+
+                // Solo hanger (TestB) times out, rescue batches pass
+                return Task.FromResult(runBatches.Select((b, i) =>
+                    b.Count == 1 && b[0] == "TestB"
+                        ? new BatchResult(i, b.Count, -1, TimedOut: true)
+                        : new BatchResult(i, b.Count, 0)).ToArray());
             },
             CancellationToken.None);
 
-        // TestB should NOT be in the retry pool
-        var allRetried = retryBatchTests.SelectMany(b => b).ToList();
-        CollectionAssert.DoesNotContain(allRetried, "TestB");
-        // TestC and TestD should be retried
-        CollectionAssert.Contains(allRetried, "TestC");
-        CollectionAssert.Contains(allRetried, "TestD");
-        // TestA passed, should not be retried
-        CollectionAssert.DoesNotContain(allRetried, "TestA");
+        var allTests = allBatchTests.SelectMany(b => b).ToList();
+        // TestA passed initially, should not appear in any work batch
+        CollectionAssert.DoesNotContain(allTests, "TestA");
+        // TestC and TestD should be rescued
+        CollectionAssert.Contains(allTests, "TestC");
+        CollectionAssert.Contains(allTests, "TestD");
+        // TestB should be tested solo
+        CollectionAssert.Contains(allTests, "TestB");
 
         // TestB confirmed as hanger
         Assert.AreEqual(1, result.HangingTests.Count);
@@ -220,9 +210,16 @@ public class RetryOrchestratorTests
     [TestMethod]
     public async Task AutoRetry_StopsWhenNoProgress()
     {
+        // All 3 tests have confirmed failure output — no rescue needed
+        var capturedOutput = new List<string>
+        {
+            "##ptr[Failed|FQN=TestA|Name=Test A]",
+            "##ptr[Failed|FQN=TestB|Name=Test B]",
+            "##ptr[Failed|FQN=TestC|Name=Test C]",
+        };
         var results = new[]
         {
-            new BatchResult(0, 3, 1), // persistent failure
+            new BatchResult(0, 3, 1, CapturedOutput: capturedOutput), // persistent failure
         };
         var batches = new List<IReadOnlyList<string>>
         {
@@ -235,9 +232,10 @@ public class RetryOrchestratorTests
             (retryBatches, opts, ct) =>
             {
                 callCount++;
-                // Always fails
+                // Always fails with output so tests are classified as failed (not never-ran)
                 return Task.FromResult(retryBatches.Select((b, i) =>
-                    new BatchResult(i, b.Count, 1)).ToArray());
+                    new BatchResult(i, b.Count, 1, CapturedOutput: b.Select(t =>
+                        $"##ptr[Failed|FQN={t}|Name={t}]").ToList())).ToArray());
             },
             CancellationToken.None);
 
@@ -248,9 +246,16 @@ public class RetryOrchestratorTests
     [TestMethod]
     public async Task FixedRetryCap_Respected()
     {
+        // All 3 tests have confirmed failure output — no rescue needed
+        var capturedOutput = new List<string>
+        {
+            "##ptr[Failed|FQN=TestA|Name=Test A]",
+            "##ptr[Failed|FQN=TestB|Name=Test B]",
+            "##ptr[Failed|FQN=TestC|Name=Test C]",
+        };
         var results = new[]
         {
-            new BatchResult(0, 3, 1), // persistent failure
+            new BatchResult(0, 3, 1, CapturedOutput: capturedOutput), // persistent failure
         };
         var batches = new List<IReadOnlyList<string>>
         {
@@ -263,9 +268,10 @@ public class RetryOrchestratorTests
             (retryBatches, opts, ct) =>
             {
                 callCount++;
-                // Always fails
+                // Always fails with output so tests are classified as failed (not never-ran)
                 return Task.FromResult(retryBatches.Select((b, i) =>
-                    new BatchResult(i, b.Count, 1)).ToArray());
+                    new BatchResult(i, b.Count, 1, CapturedOutput: b.Select(t =>
+                        $"##ptr[Failed|FQN={t}|Name={t}]").ToList())).ToArray());
             },
             CancellationToken.None);
 
@@ -348,10 +354,10 @@ public class RetryOrchestratorTests
     }
 
     [TestMethod]
-    public async Task FailedBatch_NullCapturedOutput_RetriesAllTests()
+    public async Task FailedBatch_NullCapturedOutput_RescuesAllTests()
     {
-        // When CapturedOutput is null (shouldn't happen after the fix, but defensively),
-        // all tests in the batch should be retried since we can't tell which passed.
+        // When CapturedOutput is null, all tests are "never ran" and get a rescue run.
+        // The first test is suspected as hanging since it's unaccounted.
         var results = new[]
         {
             new BatchResult(0, 3, 1, CapturedOutput: null), // failed, no output
@@ -361,22 +367,23 @@ public class RetryOrchestratorTests
             new[] { "TestA", "TestB", "TestC" },
         };
 
-        var retriedTests = new List<string>();
+        var rescuedTests = new List<string>();
         var result = await RetryOrchestrator.RunAsync(
             results, batches, DefaultOptions with { Retries = 1 },
             (retryBatches, opts, ct) =>
             {
                 foreach (var b in retryBatches)
-                    retriedTests.AddRange(b);
+                    rescuedTests.AddRange(b);
                 return Task.FromResult(retryBatches.Select((b, i) =>
                     new BatchResult(i, b.Count, 0)).ToArray());
             },
             CancellationToken.None);
 
-        // All tests should be retried since we have no output to distinguish passed from failed
-        CollectionAssert.Contains(retriedTests, "TestA");
-        CollectionAssert.Contains(retriedTests, "TestB");
-        CollectionAssert.Contains(retriedTests, "TestC");
+        // TestB and TestC should be rescued (TestA is suspected hanger, tested solo)
+        CollectionAssert.Contains(rescuedTests, "TestB");
+        CollectionAssert.Contains(rescuedTests, "TestC");
+        // TestA should be tested solo as suspected hanger
+        CollectionAssert.Contains(rescuedTests, "TestA");
     }
 
     [TestMethod]

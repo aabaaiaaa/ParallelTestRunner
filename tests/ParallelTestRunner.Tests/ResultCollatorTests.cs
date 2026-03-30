@@ -88,6 +88,7 @@ public class ResultCollatorTests
             HangingTests: new[] { "HangingTest1", "HangingTest2" },
             SuspectedHangingTests: Array.Empty<string>(),
             PersistentFailures: Array.Empty<string>(),
+            SlowTests: Array.Empty<string>(),
             RetryRoundsPerformed: 5);
 
         var exitCode = ResultCollator.Collate(results, retryResult);
@@ -107,6 +108,7 @@ public class ResultCollatorTests
             HangingTests: Array.Empty<string>(),
             SuspectedHangingTests: Array.Empty<string>(),
             PersistentFailures: Array.Empty<string>(),
+            SlowTests: Array.Empty<string>(),
             RetryRoundsPerformed: 3);
 
         var exitCode = ResultCollator.Collate(results, retryResult);
@@ -130,6 +132,7 @@ public class ResultCollatorTests
             HangingTests: new[] { "HangingTest" },
             SuspectedHangingTests: Array.Empty<string>(),
             PersistentFailures: Array.Empty<string>(),
+            SlowTests: Array.Empty<string>(),
             RetryRoundsPerformed: 1);
 
         var exitCode = ResultCollator.Collate(results, retryResult);
@@ -150,6 +153,7 @@ public class ResultCollatorTests
             HangingTests: Array.Empty<string>(),
             SuspectedHangingTests: Array.Empty<string>(),
             PersistentFailures: new[] { "FailingTest" },
+            SlowTests: Array.Empty<string>(),
             RetryRoundsPerformed: 2);
 
         var exitCode = ResultCollator.Collate(results, retryResult);
@@ -182,6 +186,7 @@ public class ResultCollatorTests
             HangingTests: Array.Empty<string>(),
             SuspectedHangingTests: Array.Empty<string>(),
             PersistentFailures: Array.Empty<string>(),
+            SlowTests: Array.Empty<string>(),
             RetryRoundsPerformed: 1);
 
         var exitCode = ResultCollator.Collate(results, retryResult);
