@@ -45,3 +45,5 @@ test-results/
 # Misc
 *.bak
 *.tmp
+
+.vs/
