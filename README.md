@@ -98,6 +98,20 @@ parallel-test-runner MyUITests.csproj --max-tests 5 --max-parallelism 2 --batch-
 - **Always increase `--idle-timeout`** — the default 60s is too short for UI tests. Use 600s (10 minutes) as a baseline; increase if tests involve long page loads or complex workflows.
 - If tests share a browser profile or singleton resource, ensure each process gets its own isolated instance (e.g. unique Playwright user data directories). The tool runs separate `dotnet test` processes, but the test project must support multiple instances running simultaneously.
 
+### CI rerun with known failing tests
+
+When you already know the exact test FQNs to rerun (e.g. from a TeamCity API or previous run), use `--test-list` to skip discovery entirely and run them directly:
+
+```bash
+# Rerun specific tests by FQN (pipe-delimited)
+parallel-test-runner MyTests.csproj --test-list "Ns.Features.LoginFeature.ValidLogin|Ns.Features.LoginFeature.InvalidPassword" --retries 3
+
+# In a TeamCity/CI rerun build step (PowerShell)
+parallel-test-runner MyTests.csproj --test-list "$qualifiedTests" --auto-retry --idle-timeout 300
+```
+
+`--test-list` takes priority — `--filter-expression` is ignored with a warning if both are provided. If an empty string is passed, the tool falls back to normal discovery. If the provided FQNs don't match any tests in the assembly, the tool exits with code 2.
+
 ### Other examples
 
 ```bash
@@ -127,7 +141,7 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry --filter-expression
 
 The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Smart retry orchestration → Result collation**.
 
-- **Discovery**: Two-step process — first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path, then runs `dotnet vstest --ListFullyQualifiedTests` to extract fully-qualified test names. Using FQNs ensures exact matching during filtering and naturally deduplicates parameterised test variants.
+- **Discovery**: Two-step process — first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path, then runs `dotnet vstest --ListFullyQualifiedTests` to extract fully-qualified test names. Using FQNs ensures exact matching during filtering and naturally deduplicates parameterised test variants. Discovery can be skipped entirely with `--test-list` (see below).
 - **Batching**: Splits tests into chunks by batch size. Any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds 7000 characters is automatically sub-split.
 - **Parallel execution**: A `SemaphoreSlim` throttles concurrent `dotnet test` processes. In-process parallelism is controlled by `--workers` (default 4), which sets the worker count for MSTest, xUnit, and NUnit via their respective runsettings properties. Use `--workers 1` to force sequential execution within each process for suites with shared-state contention. Console output is kept quiet — only `##ptr` test result lines and `##teamcity` service messages are printed. All other process output (build messages, step details, etc.) is captured internally for retry/hang detection but not displayed. TRX result files are always generated for failure diagnostics. Live progress is reported after each batch completes, showing running totals of passed/failed/executed tests.
 - **Custom test logger**: A built-in VSTest logger (`ParallelTestRunner.TestLogger`) emits structured `##ptr` lines to stdout in real-time as each test completes. Each line contains both the fully-qualified name (FQN) and display name, enabling accurate matching even when test frameworks use human-readable display names that differ from the FQN used for filtering. The logger is automatically registered via `--test-adapter-path` and `--logger ParallelTestRunner` on every `dotnet test` invocation.
@@ -188,7 +202,8 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `--idle-timeout` | int | `60` | Kill a batch if no output is received for this many seconds (0 = no timeout). Suspected hangers are retested solo with 3x this timeout. |
 | `--retries` | int | `2` | Number of times to retry each failed test (0 = no retries). Rescue runs for tests that never completed don't count toward this limit. |
 | `--auto-retry` | bool | `false` | Keep retrying failed tests as long as at least one recovers per round (overrides `--retries`) |
-| `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`) |
+| `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`). Ignored when `--test-list` is provided. |
+| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Exits with code 2 if no tests match. |
 | `--results-dir` | string | *auto temp dir* | Directory for `.trx` result files. TRX is always generated; defaults to `%TEMP%/ParallelTestRunner/run_<timestamp>` if not specified. |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 

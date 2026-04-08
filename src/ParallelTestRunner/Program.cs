@@ -288,6 +288,27 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         return;
     }
 
+    // When --test-list was provided, verify that tests actually executed.
+    // dotnet test exits 0 when a filter matches nothing, which would silently report PASSED.
+    if (parsedTestList.Count > 0)
+    {
+        var ptrRegex = Patterns.PtrLoggerLineRegex();
+        var executedCount = results
+            .Where(r => r.CapturedOutput is not null)
+            .SelectMany(r => r.CapturedOutput!)
+            .Count(line => ptrRegex.IsMatch(line));
+
+        if (executedCount == 0)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("ERROR: --test-list provided but zero tests were executed.");
+            Console.Error.WriteLine("       The FQN names may not match tests in the assembly.");
+            Console.Error.WriteLine("       Verify the fully-qualified test names are correct.");
+            toolExitCode = 2;
+            return;
+        }
+    }
+
     // Step 3.5: Smart retry with integrated hang detection
     RetryResult? retryResult = null;
     if ((options.AutoRetry || options.Retries > 0) && results.Any(r => r.ExitCode != 0))

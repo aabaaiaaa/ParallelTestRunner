@@ -371,6 +371,15 @@ public class IntegrationTests
         StringAssert.Contains(result.Stderr, "Skipping test discovery");
         StringAssert.Contains(result.Stderr, "Total: 3 tests");
         Assert.IsFalse(result.Stderr.Contains("Discovered"), $"Discovery should be skipped.\nStderr:\n{result.Stderr}");
+        // Verify ##ptr logger output is present — tests must be reported
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN=DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult"),
+            $"Expected ##ptr output for Addition test.\nStdout:\n{result.Stdout}");
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN=DummyTestProject.Arithmetic.BasicMathTests.Subtraction_ReturnsCorrectResult"),
+            $"Expected ##ptr output for Subtraction test.\nStdout:\n{result.Stdout}");
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN=DummyTestProject.Arithmetic.BasicMathTests.Multiplication_ReturnsCorrectResult"),
+            $"Expected ##ptr output for Multiplication test.\nStdout:\n{result.Stdout}");
+        // Verify progress tracking works in stderr
+        StringAssert.Contains(result.Stderr, "3 passed");
     }
 
     [TestMethod]
@@ -393,6 +402,10 @@ public class IntegrationTests
         StringAssert.Contains(result.Stderr, "Skipping test discovery");
         StringAssert.Contains(result.Stderr, "--filter-expression ignored");
         StringAssert.Contains(result.Stderr, "Total: 1 tests");
+        // Verify ##ptr logger output is present
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN=DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult"),
+            $"Expected ##ptr output for test.\nStdout:\n{result.Stdout}");
+        StringAssert.Contains(result.Stderr, "1 passed");
     }
 
     [TestMethod]
@@ -411,6 +424,21 @@ public class IntegrationTests
         Assert.AreEqual(0, result.ExitCode, $"Expected exit code 0 (retry should recover) but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Skipping test discovery");
         StringAssert.Contains(result.Stderr, "retry)");
+        // Verify ##ptr logger output is present after retry
+        Assert.IsTrue(result.Stdout.Contains("##ptr[Passed|FQN=DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult"),
+            $"Expected ##ptr output for Addition test.\nStdout:\n{result.Stdout}");
+    }
+
+    [TestMethod]
+    public void TestList_NonMatchingFqns_ExitCode2()
+    {
+        var testList = "Nonexistent.Namespace.FakeClass.FakeTest|Another.Fake.Test";
+
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list \"{testList}\"");
+
+        Assert.AreEqual(2, result.ExitCode, $"Expected exit code 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "zero tests were executed");
+        StringAssert.Contains(result.Stderr, "Verify the fully-qualified test names are correct");
     }
 
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
