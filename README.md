@@ -203,7 +203,7 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `--retries` | int | `2` | Number of times to retry each failed test (0 = no retries). Rescue runs for tests that never completed don't count toward this limit. |
 | `--auto-retry` | bool | `false` | Keep retrying failed tests as long as at least one recovers per round (overrides `--retries`) |
 | `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`). Ignored when `--test-list` is provided. |
-| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Exits with code 2 if no tests match. |
+| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Empty or omitted falls back to normal discovery. Exits with code 2 if provided FQNs match no tests. |
 | `--results-dir` | string | *auto temp dir* | Directory for `.trx` result files. TRX is always generated; defaults to `%TEMP%/ParallelTestRunner/run_<timestamp>` if not specified. |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 

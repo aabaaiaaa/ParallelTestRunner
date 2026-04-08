@@ -112,7 +112,8 @@ var filterExpressionOption = new Option<string?>("--filter-expression")
 
 var testListOption = new Option<string?>("--test-list")
 {
-    Description = "Pipe-delimited fully-qualified test names to run directly, skipping discovery. Takes priority over --filter-expression. (e.g. \"Ns.Class.Test1|Ns.Class.Test2\")"
+    Description = "Pipe-delimited fully-qualified test names to run directly, skipping discovery. Takes priority over --filter-expression. (e.g. \"Ns.Class.Test1|Ns.Class.Test2\")",
+    Arity = ArgumentArity.ZeroOrOne
 };
 
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
@@ -347,8 +348,9 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(options.AutoRetry
         ? "  Auto-retry: enabled"
         : $"  Retries: {options.Retries}");
-    if (options.TestList is not null)
-        Console.Error.WriteLine($"  Test list: provided ({TestDiscovery.ParseTestList(options.TestList).Count} tests)");
+    var bannerTestList = TestDiscovery.ParseTestList(options.TestList);
+    if (bannerTestList.Count > 0)
+        Console.Error.WriteLine($"  Test list: provided ({bannerTestList.Count} tests)");
     else if (options.FilterExpression is not null)
         Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
     Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");

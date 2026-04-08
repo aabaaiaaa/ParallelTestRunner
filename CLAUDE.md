@@ -44,7 +44,7 @@ tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
   AutoTunerTests.cs              # 11 unit tests for auto-tuning logic
   RetryOrchestratorTests.cs      # 15 unit tests for smart retry orchestration, hang detection, and FQN matching
   TestRunnerUnitTests.cs         # 19 unit tests for test runner argument building and logger validation
-  IntegrationTests.cs            # 31 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries, auto-retry, TeamCity, custom logger, --test-list)
+  IntegrationTests.cs            # 32 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries, auto-retry, TeamCity, custom logger, --test-list)
 
 tests/DummyTestProject/          # MSTest fixture project with 70 unique FQN test methods across 7 namespaces
   DummyTests.cs                  # Includes parameterised, slow, conditionally-failing, transient-failing, concurrency-detecting, long-named, and display-name tests

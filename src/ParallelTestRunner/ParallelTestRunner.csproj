@@ -13,7 +13,7 @@
 
     <!-- NuGet metadata -->
     <PackageId>ParallelTestRunner</PackageId>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <Authors>ParallelTestRunner Contributors</Authors>
     <Description>A dotnet tool that discovers MSTest tests, splits them into configurable batches, and runs multiple dotnet test processes in parallel with real-time output forwarding.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>

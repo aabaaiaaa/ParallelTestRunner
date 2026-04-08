@@ -389,6 +389,19 @@ public class IntegrationTests
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+        Assert.IsFalse(result.Stderr.Contains("Test list: provided"),
+            $"Banner should not show test list for empty string.\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void TestList_NoValue_FallsBackToDiscovery()
+    {
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --max-tests 5 --retries 0 --test-list");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+        Assert.IsFalse(result.Stderr.Contains("Test list: provided"),
+            $"Banner should not show test list when no value given.\nStderr:\n{result.Stderr}");
     }
 
     [TestMethod]
