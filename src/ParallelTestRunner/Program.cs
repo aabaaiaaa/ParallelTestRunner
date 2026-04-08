@@ -110,6 +110,11 @@ var filterExpressionOption = new Option<string?>("--filter-expression")
     Description = "VSTest filter expression applied during discovery (e.g. \"TestCategory=Smoke\", \"TestCategory!=LongRunning\")"
 };
 
+var testListOption = new Option<string?>("--test-list")
+{
+    Description = "Pipe-delimited fully-qualified test names to run directly, skipping discovery. Takes priority over --filter-expression. (e.g. \"Ns.Class.Test1|Ns.Class.Test2\")"
+};
+
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
 {
     projectArg,
@@ -124,6 +129,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     autoTuneOption,
     autoRetryOption,
     filterExpressionOption,
+    testListOption,
 };
 
 // Treat unmatched tokens as extra dotnet test args (passed after --)
@@ -154,6 +160,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var autoTune = parseResult.GetValue(autoTuneOption);
     var autoRetry = parseResult.GetValue(autoRetryOption);
     var filterExpression = parseResult.GetValue(filterExpressionOption);
+    var testList = parseResult.GetValue(testListOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
     // Always create a results directory for TRX output — use temp if not specified
@@ -172,6 +179,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         ExtraDotnetTestArgs: extraArgs,
         ResultsDirectory: resultsDir,
         FilterExpression: filterExpression,
+        TestList: testList,
         IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
 
     PrintBanner(options);
@@ -184,20 +192,35 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         return;
     }
 
-    // Step 1: Discover tests
+    // Step 1: Discover tests (or load from --test-list)
     IReadOnlyList<string> tests;
-    try
+    var parsedTestList = TestDiscovery.ParseTestList(options.TestList);
+    if (parsedTestList.Count > 0)
     {
-        tests = await TestDiscovery.DiscoverAsync(options.ProjectPath, options.ExtraDotnetTestArgs, options.FilterExpression, cancellationToken);
+        tests = parsedTestList;
+        Console.Error.WriteLine("  Skipping test discovery — using provided test list");
+        if (options.FilterExpression is not null)
+            Console.Error.WriteLine("  --filter-expression ignored (not applicable when --test-list is provided)");
+        Console.Error.WriteLine("  Tests to rerun:");
+        foreach (var test in tests)
+            Console.Error.WriteLine($"    - {test}");
+        Console.Error.WriteLine($"  Total: {tests.Count} tests");
     }
-    catch (Exception ex)
+    else
     {
-        Console.Error.WriteLine($"Discovery failed: {ex.Message}");
-        toolExitCode = 2;
-        return;
-    }
+        try
+        {
+            tests = await TestDiscovery.DiscoverAsync(options.ProjectPath, options.ExtraDotnetTestArgs, options.FilterExpression, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Discovery failed: {ex.Message}");
+            toolExitCode = 2;
+            return;
+        }
 
-    Console.Error.WriteLine($"  Discovered {tests.Count} tests");
+        Console.Error.WriteLine($"  Discovered {tests.Count} tests");
+    }
 
     // Skip tests if --skip-tests was specified
     if (skipTests > 0)
@@ -303,7 +326,9 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(options.AutoRetry
         ? "  Auto-retry: enabled"
         : $"  Retries: {options.Retries}");
-    if (options.FilterExpression is not null)
+    if (options.TestList is not null)
+        Console.Error.WriteLine($"  Test list: provided ({TestDiscovery.ParseTestList(options.TestList).Count} tests)");
+    else if (options.FilterExpression is not null)
         Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
     Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
     Console.Error.WriteLine();

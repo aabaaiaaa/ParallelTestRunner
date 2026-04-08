@@ -38,22 +38,26 @@ src/ParallelTestRunner.TestLogger/  # Custom VSTest logger (ships with the tool)
   PtrLogger.cs                   # Emits ##ptr[Outcome|FQN=...|Name=...] lines for real-time FQN tracking
 
 tests/ParallelTestRunner.Tests/  # MSTest unit + integration tests
-  TestBatcherTests.cs            # 9 unit tests for batching logic
-  TestDiscoveryParseTests.cs     # 6 unit tests for discovery output parsing
-  ResultCollatorTests.cs         # 7 unit tests for result collation and exit codes
-  AutoTunerTests.cs              # 10 unit tests for auto-tuning logic
+  TestBatcherTests.cs            # 8 unit tests for batching logic
+  TestDiscoveryParseTests.cs     # 13 unit tests for discovery output parsing and --test-list parsing
+  ResultCollatorTests.cs         # 13 unit tests for result collation and exit codes
+  AutoTunerTests.cs              # 11 unit tests for auto-tuning logic
   RetryOrchestratorTests.cs      # 15 unit tests for smart retry orchestration, hang detection, and FQN matching
-  IntegrationTests.cs            # 20 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries, auto-retry, TeamCity, custom logger)
+  TestRunnerUnitTests.cs         # 19 unit tests for test runner argument building and logger validation
+  IntegrationTests.cs            # 30 integration tests (discovery, batching, exit codes, hang detection, sequential execution, retries, auto-retry, TeamCity, custom logger, --test-list)
 
-tests/DummyTestProject/          # Fixture project with 70 unique FQN test methods across 7 namespaces
+tests/DummyTestProject/          # MSTest fixture project with 70 unique FQN test methods across 7 namespaces
   DummyTests.cs                  # Includes parameterised, slow, conditionally-failing, transient-failing, concurrency-detecting, long-named, and display-name tests
+
+tests/DummyTestProject.XUnit/   # xUnit fixture project for verifying --workers override with xUnit.MaxParallelThreads
+tests/DummyTestProject.NUnit/   # NUnit fixture project for verifying --workers override with NUnit.NumberOfTestWorkers
 ```
 
 ## Architecture
 
 The execution pipeline flows: **CLI parsing → Test discovery → Batching → Parallel execution → Smart retry orchestration → Result collation**.
 
-- **Discovery**: Two-step process: first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path from the `"Test run for <path>.dll"` output line, then runs `dotnet vstest <dll> --ListFullyQualifiedTests` to extract fully-qualified test names into a temp file. FQNs naturally deduplicate parameterised test variants (the FQN is the base method name, and `FullyQualifiedName=` matches all variants).
+- **Discovery**: Two-step process: first runs `dotnet test --list-tests --no-build` to resolve the test assembly DLL path from the `"Test run for <path>.dll"` output line, then runs `dotnet vstest <dll> --ListFullyQualifiedTests` to extract fully-qualified test names into a temp file. FQNs naturally deduplicate parameterised test variants (the FQN is the base method name, and `FullyQualifiedName=` matches all variants). **Skippable via `--test-list`**: when a pipe-delimited string of FQN test names is provided, discovery is bypassed entirely and the supplied names are fed directly into batching. `--test-list` takes priority — if both `--test-list` and `--filter-expression` are provided, `--filter-expression` is ignored with a warning (since it's a discovery-phase filter with nothing to apply to).
 - **Batching**: Chunks tests by batch size, then auto-splits any chunk whose `FullyQualifiedName=...|FullyQualifiedName=...` filter string exceeds `MaxFilterLength` (7000 chars).
 - **Execution**: `SemaphoreSlim(maxParallelism)` throttles concurrent `dotnet test` processes. In-process parallelism is controlled by `--workers` (default 4), which sets `MSTest.Parallelize.Workers`, `xUnit.MaxParallelThreads`, and `NUnit.NumberOfTestWorkers` for each process. Use `--workers 1` to force sequential execution within batches for suites with shared-state contention. Each process runs with `-v normal` verbosity to ensure per-test output keeps the idle timeout alive. Console output is quiet — only `##ptr` result lines and `##teamcity` service messages are printed; all other process output is captured internally for retry/hang detection. TRX result files are always generated (auto-created temp directory or `--results-dir` override). Process lifecycle is wrapped in `TaskCompletionSource` for async-friendly waiting. A `ProgressTracker` counts individual test passes/failures from `##ptr` logger output lines and prints a summary after each batch completes.
 - **Custom Logger**: `ParallelTestRunner.TestLogger` is a custom VSTest `ITestLoggerWithParameters` that subscribes to `TestResult` events and emits `##ptr[Outcome|FQN=Ns.Class.Method|Name=Display Name]` lines to stdout in real-time. This solves the critical problem where VSTest's human-readable output uses display names (e.g. "Accept a cancellation quote") that differ from the FQNs used for filtering (e.g. `Ns.Features.CancellationFeature.AcceptACancellationQuote`). The logger DLL ships alongside the tool via a project reference and is discovered at runtime using `AppContext.BaseDirectory` as the test adapter path.
@@ -96,8 +100,8 @@ The execution pipeline flows: **CLI parsing → Test discovery → Batching → 
 
 ## Conventions
 
-- .NET 10, C#, nullable enabled, implicit usings
-- System.CommandLine (v2.0.0-beta5) for CLI parsing
+- .NET 9, C#, nullable enabled, implicit usings
+- System.CommandLine (v2.0.0-beta5.25306.1) for CLI parsing
 - `InternalsVisibleTo` exposes internals to ParallelTestRunner.Tests
 - MSTest 3.x for all tests, including `[DataRow]` parameterised tests and `[TestMethod("display name")]` for custom display names
 - All `dotnet test` invocations pass `--no-build`, `-v normal`, `--test-adapter-path`, `--logger ParallelTestRunner`, and `--logger trx` — a separate build step is required

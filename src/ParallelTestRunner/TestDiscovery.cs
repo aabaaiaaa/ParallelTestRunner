@@ -214,6 +214,28 @@ public static partial class TestDiscovery
         return string.Join(' ', parts);
     }
 
+    /// <summary>
+    /// Parses a pipe-delimited string of fully-qualified test names into a deduplicated list.
+    /// Returns an empty list if the input is null, empty, or whitespace-only.
+    /// </summary>
+    internal static IReadOnlyList<string> ParseTestList(string? testList)
+    {
+        if (string.IsNullOrWhiteSpace(testList))
+            return [];
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<string>();
+
+        foreach (var segment in testList.Split('|'))
+        {
+            var trimmed = segment.Trim();
+            if (trimmed.Length > 0 && seen.Add(trimmed))
+                result.Add(trimmed);
+        }
+
+        return result;
+    }
+
     // Kept internal for unit tests that test parsing logic
     internal static IReadOnlyList<string> ParseDiscoveryOutput(List<string> lines)
     {

@@ -89,4 +89,66 @@ public class TestDiscoveryParseTests
         Assert.AreEqual("Ns.Cls.TestA", result[0]);
         Assert.AreEqual("Ns.Cls.TestB", result[1]);
     }
+
+    [TestMethod]
+    public void ParseTestList_PipeDelimited_ParsesCorrectly()
+    {
+        var result = TestDiscovery.ParseTestList("Ns.Cls.TestA|Ns.Cls.TestB|Ns.Cls.TestC");
+
+        Assert.AreEqual(3, result.Count);
+        Assert.AreEqual("Ns.Cls.TestA", result[0]);
+        Assert.AreEqual("Ns.Cls.TestB", result[1]);
+        Assert.AreEqual("Ns.Cls.TestC", result[2]);
+    }
+
+    [TestMethod]
+    public void ParseTestList_EmptySegments_Filtered()
+    {
+        var result = TestDiscovery.ParseTestList("Ns.Cls.TestA||Ns.Cls.TestB|");
+
+        Assert.AreEqual(2, result.Count);
+        Assert.AreEqual("Ns.Cls.TestA", result[0]);
+        Assert.AreEqual("Ns.Cls.TestB", result[1]);
+    }
+
+    [TestMethod]
+    public void ParseTestList_TrimsWhitespace()
+    {
+        var result = TestDiscovery.ParseTestList("  Ns.Cls.TestA  | Ns.Cls.TestB ");
+
+        Assert.AreEqual(2, result.Count);
+        Assert.AreEqual("Ns.Cls.TestA", result[0]);
+        Assert.AreEqual("Ns.Cls.TestB", result[1]);
+    }
+
+    [TestMethod]
+    public void ParseTestList_Deduplicates()
+    {
+        var result = TestDiscovery.ParseTestList("Ns.Cls.TestA|Ns.Cls.TestA|Ns.Cls.TestB");
+
+        Assert.AreEqual(2, result.Count);
+        Assert.AreEqual("Ns.Cls.TestA", result[0]);
+        Assert.AreEqual("Ns.Cls.TestB", result[1]);
+    }
+
+    [TestMethod]
+    public void ParseTestList_NullInput_ReturnsEmpty()
+    {
+        var result = TestDiscovery.ParseTestList(null);
+        Assert.AreEqual(0, result.Count);
+    }
+
+    [TestMethod]
+    public void ParseTestList_EmptyString_ReturnsEmpty()
+    {
+        var result = TestDiscovery.ParseTestList("");
+        Assert.AreEqual(0, result.Count);
+    }
+
+    [TestMethod]
+    public void ParseTestList_WhitespaceOnly_ReturnsEmpty()
+    {
+        var result = TestDiscovery.ParseTestList("   ");
+        Assert.AreEqual(0, result.Count);
+    }
 }

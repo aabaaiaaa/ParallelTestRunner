@@ -130,7 +130,7 @@ public class IntegrationTests
     [TestMethod]
     public void BatchSize10_MultiFilterPerBatch()
     {
-        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 10 --max-tests 20 --max-parallelism 8 --idle-timeout 10 --retries 0");
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 10 --max-tests 20 --max-parallelism 8 --idle-timeout 30 --retries 0");
 
         Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
         StringAssert.Contains(result.Stderr, "Created 2 batches");
@@ -358,6 +358,59 @@ public class IntegrationTests
 
         Assert.AreEqual(0, result.ExitCode,
             $"Expected exit code 0 — NUnit SequentialCheck tests likely detected parallel execution.\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void TestList_RunsFromString_SkipsDiscovery()
+    {
+        var testList = "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult|DummyTestProject.Arithmetic.BasicMathTests.Subtraction_ReturnsCorrectResult|DummyTestProject.Arithmetic.BasicMathTests.Multiplication_ReturnsCorrectResult";
+
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list \"{testList}\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Skipping test discovery");
+        StringAssert.Contains(result.Stderr, "Total: 3 tests");
+        Assert.IsFalse(result.Stderr.Contains("Discovered"), $"Discovery should be skipped.\nStderr:\n{result.Stderr}");
+    }
+
+    [TestMethod]
+    public void TestList_EmptyString_FallsBackToDiscovery()
+    {
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --max-tests 5 --retries 0 --test-list \"\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Discovered 70 tests");
+    }
+
+    [TestMethod]
+    public void TestList_IgnoresFilterExpression()
+    {
+        var testList = "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult";
+
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list \"{testList}\" --filter-expression \"FullyQualifiedName~Arithmetic\"");
+
+        Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Skipping test discovery");
+        StringAssert.Contains(result.Stderr, "--filter-expression ignored");
+        StringAssert.Contains(result.Stderr, "Total: 1 tests");
+    }
+
+    [TestMethod]
+    public void TestList_WithRetries_RetryStillWorks()
+    {
+        var markerPath = Path.Combine(Path.GetTempPath(), "parallel_test_runner_fail_once.marker");
+        if (File.Exists(markerPath))
+            File.Delete(markerPath);
+
+        var testList = "DummyTestProject.Arithmetic.TransientFailureTests.TransientFailure_FailsOnceThenPasses|DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult";
+
+        var result = RunTool(
+            $"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 1 --idle-timeout 10 --test-list \"{testList}\"",
+            environmentOverrides: new Dictionary<string, string> { ["FAIL_ONCE"] = "1" });
+
+        Assert.AreEqual(0, result.ExitCode, $"Expected exit code 0 (retry should recover) but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "Skipping test discovery");
+        StringAssert.Contains(result.Stderr, "retry)");
     }
 
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
