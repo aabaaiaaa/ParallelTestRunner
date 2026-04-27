@@ -103,17 +103,35 @@ parallel-test-runner MyUITests.csproj --max-tests 5 --max-parallelism 2 --batch-
 When you already know the exact test FQNs to rerun (e.g. from a TeamCity API or previous run), skip discovery entirely with either `--test-list` (pipe-delimited inline) or `--test-list-file` (path to a file). The two options are mutually exclusive.
 
 ```bash
-# Rerun specific tests by FQN (pipe-delimited)
+# Rerun specific tests by FQN (pipe-delimited, inline)
 parallel-test-runner MyTests.csproj --test-list "Ns.Features.LoginFeature.ValidLogin|Ns.Features.LoginFeature.InvalidPassword" --retries 3
+```
 
-# In a TeamCity/CI rerun build step (PowerShell)
+```powershell
+# In a TeamCity/CI rerun build step, $qualifiedTests is built earlier in the pipeline
 parallel-test-runner MyTests.csproj --test-list "$qualifiedTests" --auto-retry --idle-timeout 300
 ```
 
-For lists too long to fit on the command line — Windows `cmd.exe` is limited to ~8000 characters and `CreateProcess` to ~32,767 — use `--test-list-file` instead. Each line, or each segment between `|`, is treated as one fully-qualified test name.
+#### File format for `--test-list-file`
+
+For lists too long to fit on the command line — Windows `cmd.exe` is limited to ~8000 characters and `CreateProcess` to ~32,767 — use `--test-list-file` instead. The file accepts one FQN per line, `|`-delimited segments, or both mixed:
+
+```text
+# rerun.txt (one FQN per line — preferred for generated files)
+MyApp.Tests.PolicyFeature.AcceptCancellationQuote
+MyApp.Tests.PolicyFeature.RenewalRiskExclusion
+MyApp.Tests.PolicyFeature.GetQuoteAfterCopy
+```
+
+```text
+# Or pipe-delimited (same syntax as --test-list)
+MyApp.Tests.PolicyFeature.AcceptCancellationQuote|MyApp.Tests.PolicyFeature.RenewalRiskExclusion
+```
+
+#### PowerShell — producing the file
 
 ```powershell
-# Build a list and write it to a file
+# 1. Build a list inline and write it (one FQN per line)
 $tests = @(
     'MyApp.Tests.PolicyFeature.AcceptCancellationQuote',
     'MyApp.Tests.PolicyFeature.RenewalRiskExclusion'
@@ -122,11 +140,17 @@ $tests | Out-File -FilePath rerun.txt -Encoding utf8
 
 parallel-test-runner .\MyTests.csproj --test-list-file rerun.txt
 
-# Or rerun a list a previous CI job produced (one FQN per line)
+# 2. Convert an existing pipe-delimited string variable into a file
+$qualifiedTests = "MyApp.Tests.A.Test1|MyApp.Tests.B.Test2|MyApp.Tests.C.Test3"
+$qualifiedTests -split '\|' | Out-File -FilePath rerun.txt -Encoding utf8
+
+parallel-test-runner .\MyTests.csproj --test-list-file rerun.txt --auto-retry
+
+# 3. Rerun a list a previous CI job already wrote to disk
 parallel-test-runner .\MyTests.csproj --test-list-file failed-tests.txt
 ```
 
-**Notes:**
+#### Notes
 
 - Either option takes priority over `--filter-expression` — it's ignored with a warning if both are provided.
 - Each FQN must match the shape `Namespace.Class.Method` (with at least one dot). Filter expressions like `(FullNameMatchesRegex '...')` are rejected with exit code 2 before any test execution.
@@ -226,8 +250,8 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `--retries` | int | `2` | Number of times to retry each failed test (0 = no retries). Rescue runs for tests that never completed don't count toward this limit. |
 | `--auto-retry` | bool | `false` | Keep retrying failed tests as long as at least one recovers per round (overrides `--retries`) |
 | `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`). Ignored when `--test-list` or `--test-list-file` is provided. |
-| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Empty or omitted falls back to normal discovery. Exits with code 2 if provided FQNs match no tests. Exits with code 2 if values don't look like FQNs (e.g. filter syntax pasted by mistake). |
-| `--test-list-file` | path | *(none)* | Path to a file with FQN test names (one per line, or pipe-delimited). For lists too long for the command line. Mutually exclusive with `--test-list`. |
+| `--test-list` | string | *(none)* | Pipe-delimited FQN test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Mutually exclusive with `--test-list-file`. See "CI rerun with known failing tests" above for behaviour and exit codes. |
+| `--test-list-file` | path | *(none)* | Path to a file with FQN test names (one per line, `\|`-delimited, or both). For lists too long for the command line. Mutually exclusive with `--test-list`. See "CI rerun with known failing tests" above for behaviour and exit codes. |
 | `--results-dir` | string | *auto temp dir* | Directory for `.trx` result files. TRX is always generated; defaults to `%TEMP%/ParallelTestRunner/run_<timestamp>` if not specified. |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 
