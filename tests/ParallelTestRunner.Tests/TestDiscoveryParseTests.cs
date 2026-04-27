@@ -343,9 +343,9 @@ public class TestDiscoveryParseTests
     }
 
     [TestMethod]
-    [ExpectedException(typeof(FileNotFoundException))]
     public void ParseTestListFile_MissingFile_Throws()
     {
-        TestDiscovery.ParseTestListFile(Path.Combine(Path.GetTempPath(), "definitely_not_a_real_file_" + Guid.NewGuid() + ".txt"));
+        var fakePath = Path.Combine(Path.GetTempPath(), "definitely_not_a_real_file_" + Guid.NewGuid() + ".txt");
+        Assert.ThrowsExactly<FileNotFoundException>(() => TestDiscovery.ParseTestListFile(fakePath));
     }
 }
