@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Reflection;
 using ParallelTestRunner;
 
 var projectArg = new Argument<string>("project")
@@ -379,45 +380,15 @@ return parseExitCode != 0 ? parseExitCode : toolExitCode;
 
 static void PrintBanner(Options options)
 {
-    const string banner = """
+    var version = typeof(Options).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                  ?? typeof(Options).Assembly.GetName().Version?.ToString()
+                  ?? "unknown";
 
-        ____                 _ _      _   _____         _     ____
-       |  _ \ __ _ _ __ __ _| | | ___| | |_   _|__  ___| |_  |  _ \ _   _ _ __  _ __   ___ _ __
-       | |_) / _` | '__/ _` | | |/ _ \ |   | |/ _ \/ __| __| | |_) | | | | '_ \| '_ \ / _ \ '__|
-       |  __/ (_| | | | (_| | | |  __/ |   | |  __/\__ \ |_  |  _ <| |_| | | | | | | |  __/ |
-       |_|   \__,_|_|  \__,_|_|_|\___|_|   |_|\___||___/\__| |_| \_\\__,_|_| |_|_| |_|\___|_|
+    // Strip git-hash suffix sometimes appended by SourceLink (e.g. "1.1.2+abcdef0")
+    var plusIndex = version.IndexOf('+');
+    if (plusIndex > 0)
+        version = version[..plusIndex];
 
-    """;
-
-    Console.Error.WriteLine(banner);
-    Console.Error.WriteLine($"  Detected cores: {Environment.ProcessorCount}");
-    Console.Error.WriteLine($"  Chosen parallelism: {options.MaxParallelism}");
-    Console.Error.WriteLine($"  Workers per process: {options.Workers}");
-    Console.Error.WriteLine($"  Idle timeout: {(options.IdleTimeout > TimeSpan.Zero ? $"{options.IdleTimeout.TotalSeconds:F0}s" : "none")}");
-    Console.Error.WriteLine(options.AutoRetry
-        ? "  Auto-retry: enabled"
-        : $"  Retries: {options.Retries}");
-    IReadOnlyList<string> bannerTestList;
-    if (!string.IsNullOrWhiteSpace(options.TestListFile))
-    {
-        // Banner is best-effort display; the action layer's file-loading branch is the
-        // source of truth for file errors and will exit 2 with the proper message.
-        try { bannerTestList = TestDiscovery.ParseTestListFile(options.TestListFile); }
-        catch { bannerTestList = []; }
-    }
-    else
-    {
-        bannerTestList = TestDiscovery.ParseTestList(options.TestList);
-    }
-    if (bannerTestList.Count > 0)
-    {
-        if (!string.IsNullOrWhiteSpace(options.TestListFile))
-            Console.Error.WriteLine($"  Test list: provided from {options.TestListFile} ({bannerTestList.Count} tests)");
-        else
-            Console.Error.WriteLine($"  Test list: provided ({bannerTestList.Count} tests)");
-    }
-    else if (options.FilterExpression is not null)
-        Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
-    Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");
+    Console.Error.Write(Banner.BuildBanner(options, version));
     Console.Error.WriteLine();
 }
