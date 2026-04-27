@@ -240,4 +240,112 @@ public class TestDiscoveryParseTests
         Assert.AreEqual(1, failures[0].Index);
         Assert.AreEqual("bad input", failures[0].Segment);
     }
+
+    [TestMethod]
+    public void ParseTestListFile_NewlineSeparated_Parses()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "A.B.C\nD.E.F\n");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+            Assert.AreEqual("A.B.C", result[0]);
+            Assert.AreEqual("D.E.F", result[1]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_PipeSeparated_Parses()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "A.B.C|D.E.F");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_MixedDelimiters_Parses()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "A.B.C|D.E.F\nG.H.I");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(3, result.Count);
+            Assert.AreEqual("A.B.C", result[0]);
+            Assert.AreEqual("D.E.F", result[1]);
+            Assert.AreEqual("G.H.I", result[2]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_TrimsWhitespace()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "  A.B.C  \n  D.E.F  ");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+            Assert.AreEqual("A.B.C", result[0]);
+            Assert.AreEqual("D.E.F", result[1]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_HandlesUtf8Bom()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var bytes = new List<byte> { 0xEF, 0xBB, 0xBF };
+            bytes.AddRange(System.Text.Encoding.UTF8.GetBytes("A.B.C\nD.E.F"));
+            File.WriteAllBytes(path, bytes.ToArray());
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+            Assert.AreEqual("A.B.C", result[0]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_Deduplicates()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "A.B.C\nA.B.C\nD.E.F");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void ParseTestListFile_SkipsEmptySegments()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "A.B.C\n\n||D.E.F\n   \n");
+            var result = TestDiscovery.ParseTestListFile(path);
+            Assert.AreEqual(2, result.Count);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(FileNotFoundException))]
+    public void ParseTestListFile_MissingFile_Throws()
+    {
+        TestDiscovery.ParseTestListFile(Path.Combine(Path.GetTempPath(), "definitely_not_a_real_file_" + Guid.NewGuid() + ".txt"));
+    }
 }

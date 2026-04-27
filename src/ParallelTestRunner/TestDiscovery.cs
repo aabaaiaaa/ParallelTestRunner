@@ -239,6 +239,9 @@ public static partial class TestDiscovery
         return result;
     }
 
+    internal static IReadOnlyList<string> ParseTestListFile(string path)
+        => throw new NotImplementedException();
+
     // Kept internal for unit tests that test parsing logic
     internal static IReadOnlyList<string> ParseDiscoveryOutput(List<string> lines)
     {
