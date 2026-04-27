@@ -112,6 +112,36 @@ parallel-test-runner MyTests.csproj --test-list "$qualifiedTests" --auto-retry -
 
 `--test-list` takes priority — `--filter-expression` is ignored with a warning if both are provided. If an empty string is passed, the tool falls back to normal discovery. If the provided FQNs don't match any tests in the assembly, the tool exits with code 2.
 
+### `--test-list-file <path>`
+
+For lists too long to fit on the command line — Windows `cmd.exe` is limited to ~8000 characters and `CreateProcess` to ~32,767 — pass test names via a file. Each line, or each segment between `|`, is treated as one fully-qualified test name. Mutually exclusive with `--test-list`.
+
+#### PowerShell example: build a list and write it to a file
+
+```powershell
+$tests = @(
+    'MyApp.Tests.PolicyFeature.AcceptCancellationQuote',
+    'MyApp.Tests.PolicyFeature.RenewalRiskExclusion'
+)
+$tests | Out-File -FilePath rerun.txt -Encoding utf8
+
+parallel-test-runner .\MyTests.csproj --test-list-file rerun.txt
+```
+
+#### PowerShell example: rerun a list from a previous CI job
+
+If a previous build produced `failed-tests.txt` (one FQN per line), rerun those failures:
+
+```powershell
+parallel-test-runner .\MyTests.csproj --test-list-file failed-tests.txt
+```
+
+#### Notes
+
+- Each FQN must match the shape `Namespace.Class.Method` (with at least one dot). Filter expressions like `(FullNameMatchesRegex '...')` will be rejected with an error and exit code 2.
+- File content is treated case-sensitively, the same as `--test-list`.
+- UTF-8 with or without a BOM is supported.
+
 ### Other examples
 
 ```bash
@@ -203,7 +233,8 @@ parallel-test-runner MyTests.csproj --auto-tune --auto-retry
 | `--retries` | int | `2` | Number of times to retry each failed test (0 = no retries). Rescue runs for tests that never completed don't count toward this limit. |
 | `--auto-retry` | bool | `false` | Keep retrying failed tests as long as at least one recovers per round (overrides `--retries`) |
 | `--filter-expression` | string | *(none)* | VSTest filter expression applied during discovery (e.g. `"TestCategory=Smoke"`). Ignored when `--test-list` is provided. |
-| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Empty or omitted falls back to normal discovery. Exits with code 2 if provided FQNs match no tests. |
+| `--test-list` | string | *(none)* | Pipe-delimited fully-qualified test names to run directly, skipping discovery (e.g. `"Ns.Class.Test1\|Ns.Class.Test2"`). Takes priority over `--filter-expression`. Empty or omitted falls back to normal discovery. Exits with code 2 if provided FQNs match no tests. Exits with code 2 if values don't look like FQNs (e.g. filter syntax pasted by mistake). |
+| `--test-list-file` | path | *(none)* | Path to a file with FQN test names (one per line, or pipe-delimited). For lists too long for the command line. Mutually exclusive with `--test-list`. |
 | `--results-dir` | string | *auto temp dir* | Directory for `.trx` result files. TRX is always generated; defaults to `%TEMP%/ParallelTestRunner/run_<timestamp>` if not specified. |
 | `-- <args>` | string[] | *(none)* | Extra arguments passed through to `dotnet test` |
 
