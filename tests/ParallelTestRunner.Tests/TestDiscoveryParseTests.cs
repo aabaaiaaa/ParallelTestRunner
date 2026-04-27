@@ -151,4 +151,93 @@ public class TestDiscoveryParseTests
         var result = TestDiscovery.ParseTestList("   ");
         Assert.AreEqual(0, result.Count);
     }
+
+    [TestMethod]
+    public void ValidateTestList_ValidFqn_ReturnsNoFailures()
+    {
+        var failures = TestDiscovery.ValidateTestList(["Ns.Class.Method"]);
+        Assert.AreEqual(0, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_DeepNamespace_ReturnsNoFailures()
+    {
+        var failures = TestDiscovery.ValidateTestList(["A.B.C.D.E.Method"]);
+        Assert.AreEqual(0, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_UnderscoresAndDigits_ReturnsNoFailures()
+    {
+        var failures = TestDiscovery.ValidateTestList(["_Foo.Bar_.Test_1"]);
+        Assert.AreEqual(0, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_VstestFilterExpression_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["(FullNameMatchesRegex '(\\.X$)')"]);
+        Assert.AreEqual(1, failures.Count);
+        Assert.AreEqual(0, failures[0].Index);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_Parens_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["Ns.Class.Method()"]);
+        Assert.AreEqual(1, failures.Count);
+        StringAssert.Contains(failures[0].Reason.ToLowerInvariant(), "paren");
+    }
+
+    [TestMethod]
+    public void ValidateTestList_SingleQuotes_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["'Ns.Class.Method'"]);
+        Assert.AreEqual(1, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_EqualsSign_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["FullyQualifiedName=Ns.Class.M"]);
+        Assert.AreEqual(1, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_RegexAnchor_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["Ns.Class.Method$"]);
+        Assert.AreEqual(1, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_Spaces_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["Ns Class Method"]);
+        Assert.AreEqual(1, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_BareIdentifierNoDots_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["MyTest"]);
+        Assert.AreEqual(1, failures.Count);
+        StringAssert.Contains(failures[0].Reason.ToLowerInvariant(), "dot");
+    }
+
+    [TestMethod]
+    public void ValidateTestList_LeadingDigit_ReturnsFailure()
+    {
+        var failures = TestDiscovery.ValidateTestList(["1Ns.Class.Method"]);
+        Assert.AreEqual(1, failures.Count);
+    }
+
+    [TestMethod]
+    public void ValidateTestList_PartialFailures_ReportsOnlyBadOnes()
+    {
+        var failures = TestDiscovery.ValidateTestList(["Good.Class.M", "bad input", "Also.Good.M"]);
+        Assert.AreEqual(1, failures.Count);
+        Assert.AreEqual(1, failures[0].Index);
+        Assert.AreEqual("bad input", failures[0].Segment);
+    }
 }

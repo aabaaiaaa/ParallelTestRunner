@@ -251,4 +251,14 @@ public static partial class TestDiscovery
 
         return result;
     }
+
+    /// <summary>
+    /// Validates that each segment in the supplied test list looks like a fully-qualified
+    /// test name (dot-separated identifiers) rather than a VSTest filter expression or other
+    /// malformed input. Returns a list of failures describing which segments are invalid.
+    /// </summary>
+    internal static IReadOnlyList<TestListValidationFailure> ValidateTestList(IReadOnlyList<string> segments)
+        => throw new NotImplementedException();
 }
+
+internal sealed record TestListValidationFailure(int Index, string Segment, string Reason);
