@@ -400,8 +400,10 @@ static void PrintBanner(Options options)
     IReadOnlyList<string> bannerTestList;
     if (!string.IsNullOrWhiteSpace(options.TestListFile))
     {
+        // Banner is best-effort display; the action layer's file-loading branch is the
+        // source of truth for file errors and will exit 2 with the proper message.
         try { bannerTestList = TestDiscovery.ParseTestListFile(options.TestListFile); }
-        catch (FileNotFoundException) { bannerTestList = []; }
+        catch { bannerTestList = []; }
     }
     else
     {

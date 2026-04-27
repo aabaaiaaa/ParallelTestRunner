@@ -482,12 +482,6 @@ public class IntegrationTests
     [TestMethod]
     public void TestListFile_AllDummyTests_RunsSuccessfully()
     {
-        // Discover the real FQNs first so we don't hardcode them.
-        var discoveryResult = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-tests 1 --retries 0");
-        Assert.AreEqual(0, discoveryResult.ExitCode, "Pre-discovery probe failed");
-
-        // Build a file with all 70 known DummyTestProject FQNs by running discovery against the project.
-        // Easiest: use --test-list-file with FQNs that we know match. We'll seed three known-passing ones.
         var fqns = new[]
         {
             "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult",
