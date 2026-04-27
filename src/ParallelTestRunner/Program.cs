@@ -198,6 +198,17 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var parsedTestList = TestDiscovery.ParseTestList(options.TestList);
     if (parsedTestList.Count > 0)
     {
+        var validationFailures = TestDiscovery.ValidateTestList(parsedTestList);
+        if (validationFailures.Count > 0)
+        {
+            Console.Error.WriteLine("ERROR: --test-list contains values that don't look like fully-qualified test names:");
+            foreach (var failure in validationFailures)
+                Console.Error.WriteLine($"  [{failure.Index}] {failure.Segment} — {failure.Reason}");
+            Console.Error.WriteLine("Expected format: Namespace.Class.Method (one or more dots, no spaces, parens, quotes, or regex syntax).");
+            toolExitCode = 2;
+            return;
+        }
+
         tests = parsedTestList;
         Console.Error.WriteLine("  Skipping test discovery — using provided test list");
         if (options.FilterExpression is not null)

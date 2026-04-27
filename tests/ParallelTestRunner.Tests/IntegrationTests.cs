@@ -454,6 +454,31 @@ public class IntegrationTests
         StringAssert.Contains(result.Stderr, "Verify the fully-qualified test names are correct");
     }
 
+    [TestMethod]
+    public void TestList_VstestFilterSyntax_ExitCode2WithValidationError()
+    {
+        // The user's actual broken case: vstest TestCaseFilter expression accidentally
+        // pasted into --test-list. Should fail validation upfront, not slip through to
+        // dotnet test as junk filters.
+        var badInput = "(FullNameMatchesRegex '(\\.RequestingPolicyDetails$)|(\\.GetQuoteAfterCopy$)')";
+
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list \"{badInput}\"");
+
+        Assert.AreEqual(2, result.ExitCode, $"Expected exit code 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "ERROR: --test-list contains values that don't look like fully-qualified test names");
+    }
+
+    [TestMethod]
+    public void TestList_PartiallyValidInput_ExitCode2ListsBadSegments()
+    {
+        var mixed = "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult|bad input here|DummyTestProject.Arithmetic.BasicMathTests.Subtraction_ReturnsCorrectResult";
+
+        var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list \"{mixed}\"");
+
+        Assert.AreEqual(2, result.ExitCode, $"Expected exit code 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "bad input here");
+    }
+
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
     {
         return RunProcess("dotnet", $"run --project \"{_toolProjectPath}\" --no-launch-profile -- {arguments}",
