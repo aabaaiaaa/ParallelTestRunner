@@ -239,8 +239,37 @@ public static partial class TestDiscovery
         return result;
     }
 
+    /// <summary>
+    /// Reads a file whose content is split on both newlines and '|' into a list of FQN segments.
+    /// Trims, skips blanks, deduplicates. Strips a leading UTF-8 BOM if present.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">When <paramref name="path"/> does not exist.</exception>
     internal static IReadOnlyList<string> ParseTestListFile(string path)
-        => throw new NotImplementedException();
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"--test-list-file path not found: {path}", path);
+
+        var content = File.ReadAllText(path, System.Text.Encoding.UTF8);
+
+        // File.ReadAllText with explicit UTF8 encoding strips the BOM, but be defensive.
+        if (content.Length > 0 && content[0] == '﻿')
+            content = content[1..];
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<string>();
+
+        foreach (var line in content.Split('\n'))
+        {
+            foreach (var segment in line.Split('|'))
+            {
+                var trimmed = segment.Trim();
+                if (trimmed.Length > 0 && seen.Add(trimmed))
+                    result.Add(trimmed);
+            }
+        }
+
+        return result;
+    }
 
     // Kept internal for unit tests that test parsing logic
     internal static IReadOnlyList<string> ParseDiscoveryOutput(List<string> lines)
