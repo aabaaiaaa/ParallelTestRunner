@@ -479,6 +479,99 @@ public class IntegrationTests
         StringAssert.Contains(result.Stderr, "bad input here");
     }
 
+    [TestMethod]
+    public void TestListFile_AllDummyTests_RunsSuccessfully()
+    {
+        // Discover the real FQNs first so we don't hardcode them.
+        var discoveryResult = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-tests 1 --retries 0");
+        Assert.AreEqual(0, discoveryResult.ExitCode, "Pre-discovery probe failed");
+
+        // Build a file with all 70 known DummyTestProject FQNs by running discovery against the project.
+        // Easiest: use --test-list-file with FQNs that we know match. We'll seed three known-passing ones.
+        var fqns = new[]
+        {
+            "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult",
+            "DummyTestProject.Arithmetic.BasicMathTests.Subtraction_ReturnsCorrectResult",
+            "DummyTestProject.Arithmetic.BasicMathTests.Multiplication_ReturnsCorrectResult",
+        };
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllLines(path, fqns);
+
+            var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list-file \"{path}\"");
+
+            Assert.AreEqual(0, result.ExitCode, $"Tool failed:\n{result.Stderr}");
+            StringAssert.Contains(result.Stderr, "Skipping test discovery");
+            StringAssert.Contains(result.Stderr, $"Test list: provided from {path}");
+            StringAssert.Contains(result.Stderr, "Total: 3 tests");
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void TestListFile_VeryLongList_OsInvocationSucceeds()
+    {
+        // 250 unique FQN-shaped strings, ~80 chars each = ~20k chars.
+        // Far past the 16k cmd.exe limit and approaching the 32k CreateProcess limit.
+        // The FQNs are syntactically valid (validator passes) but match nothing in the assembly.
+        // Expected exit: 2 (zero tests executed) — the *point* is that we got that far without an OS-level launch failure.
+        var path = Path.GetTempFileName();
+        try
+        {
+            var lines = new List<string>();
+            for (var i = 0; i < 250; i++)
+                lines.Add($"VeryLongFakeNamespace_PaddingForTheCommandLineLengthTest.SubNs{i:D3}.FakeTestClass.FakeTestMethod_PaddedSuffix_{i:D3}");
+            File.WriteAllLines(path, lines);
+            Assert.IsTrue(new FileInfo(path).Length > 16000, "Test setup invariant: file must exceed 16k char threshold");
+
+            var result = RunTool($"\"{_dummyProjectPath}\" --batch-size 100 --max-parallelism 1 --retries 0 --test-list-file \"{path}\"");
+
+            Assert.AreEqual(2, result.ExitCode, $"Expected exit 2 (zero tests executed), got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+            StringAssert.Contains(result.Stderr, "zero tests were executed");
+            Assert.IsFalse(result.Stderr.Contains("filename or extension is too long"),
+                "OS-level launch failure detected — the long list was passed via argv instead of via the file");
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void TestListFile_AndTestList_BothProvided_ExitCode2()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "DummyTestProject.Arithmetic.BasicMathTests.Addition_ReturnsCorrectResult");
+            var result = RunTool($"\"{_dummyProjectPath}\" --retries 0 --test-list \"Some.Test.Name\" --test-list-file \"{path}\"");
+            Assert.AreEqual(2, result.ExitCode, $"Expected exit 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+            StringAssert.Contains(result.Stderr, "mutually exclusive");
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void TestListFile_MissingFile_ExitCode2()
+    {
+        var fakePath = Path.Combine(Path.GetTempPath(), "definitely_not_a_real_file_" + Guid.NewGuid() + ".txt");
+        var result = RunTool($"\"{_dummyProjectPath}\" --retries 0 --test-list-file \"{fakePath}\"");
+        Assert.AreEqual(2, result.ExitCode, $"Expected exit 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+        StringAssert.Contains(result.Stderr, "path not found");
+    }
+
+    [TestMethod]
+    public void TestListFile_InvalidContent_ExitCode2()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "(FullNameMatchesRegex '(\\.X$)')");
+            var result = RunTool($"\"{_dummyProjectPath}\" --retries 0 --test-list-file \"{path}\"");
+            Assert.AreEqual(2, result.ExitCode, $"Expected exit 2 but got {result.ExitCode}.\nStderr:\n{result.Stderr}");
+            StringAssert.Contains(result.Stderr, "ERROR: --test-list contains values that don't look like fully-qualified test names");
+        }
+        finally { File.Delete(path); }
+    }
+
     private static ProcessResult RunTool(string arguments, Dictionary<string, string>? environmentOverrides = null)
     {
         return RunProcess("dotnet", $"run --project \"{_toolProjectPath}\" --no-launch-profile -- {arguments}",

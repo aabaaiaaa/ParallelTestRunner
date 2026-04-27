@@ -116,6 +116,12 @@ var testListOption = new Option<string?>("--test-list")
     Arity = ArgumentArity.ZeroOrOne
 };
 
+var testListFileOption = new Option<string?>("--test-list-file")
+{
+    Description = "Path to a file containing fully-qualified test names (one per line, or pipe-delimited). Mutually exclusive with --test-list.",
+    Arity = ArgumentArity.ZeroOrOne
+};
+
 var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and run dotnet tests in parallel")
 {
     projectArg,
@@ -131,6 +137,7 @@ var rootCommand = new RootCommand("Parallel Test Runner — discover, batch, and
     autoRetryOption,
     filterExpressionOption,
     testListOption,
+    testListFileOption,
 };
 
 // Treat unmatched tokens as extra dotnet test args (passed after --)
@@ -162,6 +169,7 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
     var autoRetry = parseResult.GetValue(autoRetryOption);
     var filterExpression = parseResult.GetValue(filterExpressionOption);
     var testList = parseResult.GetValue(testListOption);
+    var testListFile = parseResult.GetValue(testListFileOption);
     var extraArgs = parseResult.UnmatchedTokens.ToArray();
 
     // Always create a results directory for TRX output — use temp if not specified
@@ -181,7 +189,16 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         ResultsDirectory: resultsDir,
         FilterExpression: filterExpression,
         TestList: testList,
+        TestListFile: testListFile,
         IdleTimeout: idleTimeout > 0 ? TimeSpan.FromSeconds(idleTimeout) : TimeSpan.Zero);
+
+    // Mutual exclusion: --test-list and --test-list-file cannot both be provided.
+    if (!string.IsNullOrWhiteSpace(options.TestList) && !string.IsNullOrWhiteSpace(options.TestListFile))
+    {
+        Console.Error.WriteLine("ERROR: --test-list and --test-list-file are mutually exclusive. Use one or the other.");
+        toolExitCode = 2;
+        return;
+    }
 
     PrintBanner(options);
 
@@ -193,9 +210,28 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
         return;
     }
 
-    // Step 1: Discover tests (or load from --test-list)
+    // Step 1: Discover tests (or load from --test-list / --test-list-file)
     IReadOnlyList<string> tests;
-    var parsedTestList = TestDiscovery.ParseTestList(options.TestList);
+    IReadOnlyList<string> parsedTestList;
+    string? testListSource = null;
+    if (!string.IsNullOrWhiteSpace(options.TestListFile))
+    {
+        try
+        {
+            parsedTestList = TestDiscovery.ParseTestListFile(options.TestListFile);
+            testListSource = options.TestListFile;
+        }
+        catch (FileNotFoundException ex)
+        {
+            Console.Error.WriteLine($"ERROR: {ex.Message}");
+            toolExitCode = 2;
+            return;
+        }
+    }
+    else
+    {
+        parsedTestList = TestDiscovery.ParseTestList(options.TestList);
+    }
     if (parsedTestList.Count > 0)
     {
         var validationFailures = TestDiscovery.ValidateTestList(parsedTestList);
@@ -211,8 +247,10 @@ rootCommand.SetAction(async (parseResult, cancellationToken) =>
 
         tests = parsedTestList;
         Console.Error.WriteLine("  Skipping test discovery — using provided test list");
+        if (testListSource is not null)
+            Console.Error.WriteLine($"  Source: {testListSource}");
         if (options.FilterExpression is not null)
-            Console.Error.WriteLine("  --filter-expression ignored (not applicable when --test-list is provided)");
+            Console.Error.WriteLine("  --filter-expression ignored (not applicable when --test-list/--test-list-file is provided)");
         Console.Error.WriteLine("  Tests to rerun:");
         foreach (var test in tests)
             Console.Error.WriteLine($"    - {test}");
@@ -359,9 +397,23 @@ static void PrintBanner(Options options)
     Console.Error.WriteLine(options.AutoRetry
         ? "  Auto-retry: enabled"
         : $"  Retries: {options.Retries}");
-    var bannerTestList = TestDiscovery.ParseTestList(options.TestList);
+    IReadOnlyList<string> bannerTestList;
+    if (!string.IsNullOrWhiteSpace(options.TestListFile))
+    {
+        try { bannerTestList = TestDiscovery.ParseTestListFile(options.TestListFile); }
+        catch (FileNotFoundException) { bannerTestList = []; }
+    }
+    else
+    {
+        bannerTestList = TestDiscovery.ParseTestList(options.TestList);
+    }
     if (bannerTestList.Count > 0)
-        Console.Error.WriteLine($"  Test list: provided ({bannerTestList.Count} tests)");
+    {
+        if (!string.IsNullOrWhiteSpace(options.TestListFile))
+            Console.Error.WriteLine($"  Test list: provided from {options.TestListFile} ({bannerTestList.Count} tests)");
+        else
+            Console.Error.WriteLine($"  Test list: provided ({bannerTestList.Count} tests)");
+    }
     else if (options.FilterExpression is not null)
         Console.Error.WriteLine($"  Filter: {options.FilterExpression}");
     Console.Error.WriteLine($"  Results dir: {options.ResultsDirectory}");

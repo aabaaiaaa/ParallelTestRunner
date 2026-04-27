@@ -12,6 +12,7 @@ public record Options(
     string? ResultsDirectory = null,
     string? FilterExpression = null,
     string? TestList = null,
+    string? TestListFile = null,
     TimeSpan IdleTimeout = default)
 {
     public int MaxParallelism { get; init; } = MaxParallelism > 0
