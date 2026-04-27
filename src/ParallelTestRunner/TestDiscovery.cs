@@ -10,6 +10,9 @@ public static partial class TestDiscovery
     [GeneratedRegex(@"^Test run for (.+\.dll)")]
     private static partial Regex DllPathRegex();
 
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")]
+    private static partial Regex FqnShapeRegex();
+
     /// <summary>
     /// Discovers tests by first resolving the test DLL path via <c>dotnet test --list-tests</c>,
     /// then extracting fully-qualified test names via <c>dotnet vstest --ListFullyQualifiedTests</c>.
@@ -258,7 +261,43 @@ public static partial class TestDiscovery
     /// malformed input. Returns a list of failures describing which segments are invalid.
     /// </summary>
     internal static IReadOnlyList<TestListValidationFailure> ValidateTestList(IReadOnlyList<string> segments)
-        => throw new NotImplementedException();
+    {
+        var failures = new List<TestListValidationFailure>();
+        var regex = FqnShapeRegex();
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                failures.Add(new TestListValidationFailure(i, segment, "empty segment"));
+                continue;
+            }
+
+            if (regex.IsMatch(segment))
+                continue;
+
+            failures.Add(new TestListValidationFailure(i, segment, DescribeFailure(segment)));
+        }
+
+        return failures;
+    }
+
+    private static string DescribeFailure(string segment)
+    {
+        if (segment.Contains('('))   return "contains parenthesis '(' — looks like a filter expression, not an FQN";
+        if (segment.Contains(')'))   return "contains parenthesis ')' — looks like a filter expression, not an FQN";
+        if (segment.Contains('\''))  return "contains single quote — looks like a filter expression, not an FQN";
+        if (segment.Contains('='))   return "contains '=' — looks like a filter expression (e.g. FullyQualifiedName=...)";
+        if (segment.Contains('~'))   return "contains '~' — looks like a filter expression";
+        if (segment.Contains('$'))   return "contains regex anchor '$'";
+        if (segment.Contains('^'))   return "contains regex anchor '^'";
+        if (segment.Contains(' '))   return "contains spaces — FQNs do not contain spaces";
+        if (!segment.Contains('.'))  return "no dots — expected at least Namespace.Class.Method";
+        if (char.IsDigit(segment[0])) return "starts with a digit — identifiers must start with a letter or underscore";
+        return "not a valid dotted identifier (Namespace.Class.Method shape)";
+    }
 }
 
 internal sealed record TestListValidationFailure(int Index, string Segment, string Reason);
