@@ -28,23 +28,23 @@ public class BannerTests
     public void BuildBanner_ContainsGradient()
     {
         var output = Banner.BuildBanner(DefaultOptions(), "1.0.0");
-        StringAssert.Contains(output, "░▒▓");
+        StringAssert.Contains(output, "..::;/");
     }
 
     [TestMethod]
-    public void BuildBanner_ContainsAnsiShadowParallelFingerprint()
+    public void BuildBanner_ContainsParallelFingerprint()
     {
         var output = Banner.BuildBanner(DefaultOptions(), "1.0.0");
-        // First line of "Parallel" in ANSI Shadow font
-        StringAssert.Contains(output, "██████╗  █████╗ ██████╗  █████╗ ██╗     ██╗     ███████╗██╗");
+        // Last line of "Parallel" in slant 3D font
+        StringAssert.Contains(output, @"/_/    \__,_/_/   \__,_/_/_/\___/_/");
     }
 
     [TestMethod]
-    public void BuildBanner_ContainsAnsiShadowTestRunnerFingerprint()
+    public void BuildBanner_ContainsTestRunnerFingerprint()
     {
         var output = Banner.BuildBanner(DefaultOptions(), "1.0.0");
-        // First line of "Test Runner" in ANSI Shadow font
-        StringAssert.Contains(output, "████████╗███████╗███████╗████████╗");
+        // Last line of "Test Runner" in slant 3D font
+        StringAssert.Contains(output, @"/_/ |_|\__,_/_/ /_/_/ /_/\___/_/");
     }
 
     [TestMethod]

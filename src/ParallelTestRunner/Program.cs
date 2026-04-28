@@ -1,11 +1,6 @@
 using System.CommandLine;
 using System.Reflection;
-using System.Text;
 using ParallelTestRunner;
-
-// Force UTF-8 so the banner's box-drawing and shading chars render correctly across
-// hosts whose default code page is CP437/CP1252 (e.g. TeamCity Windows agents).
-Console.OutputEncoding = Encoding.UTF8;
 
 var projectArg = new Argument<string>("project")
 {
